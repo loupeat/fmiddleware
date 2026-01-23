@@ -1,0 +1,116 @@
+# Serverless Framework configuration for Notes API
+# Deploys the same API code that runs locally with Express to AWS Lambda
+
+service: notes-api
+
+plugins:
+  - serverless-esbuild
+
+custom:
+  stage: ${opt:stage, 'dev'}
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node20
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'eu-west-1'}
+  stage: ${self:custom.stage}
+  environment:
+    LOG_LEVEL: ${self:custom.stage == 'prod' ? 'info' : 'debug'}
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_USER_POOL_ID: ${env:COGNITO_USER_POOL_ID, ''}
+
+# Split Lambda functions by authentication context.
+# This optimizes cold starts by only loading relevant routes and processors.
+functions:
+
+  # Public endpoints - no authentication required
+  # Handles: /api/public/**
+  public:
+    handler: src/lambda.publicHandler
+    events:
+      - http:
+          method: any
+          path: api/public/{proxy+}
+          cors: true
+    timeout: 15
+    memorySize: 256
+
+  # Private endpoints - requires valid JWT token
+  # Handles: /api/private/**
+  # Uses Cognito authorizer for token validation at API Gateway level
+  private:
+    handler: src/lambda.privateHandler
+    events:
+      - http:
+          method: any
+          path: api/private/{proxy+}
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+    timeout: 30
+    memorySize: 512
+
+resources:
+  Resources:
+    # Cognito User Pool (for demo - in production, reference existing pool)
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-${self:custom.stage}-users
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+          - Name: given_name
+            Required: false
+            Mutable: true
+          - Name: family_name
+            Required: false
+            Mutable: true
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-${self:custom.stage}-client
+        UserPoolId:
+          Ref: CognitoUserPool
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+        GenerateSecret: false
+
+    # API Gateway Cognito Authorizer
+    ApiGatewayAuthorizer:
+      Type: AWS::ApiGateway::Authorizer
+      Properties:
+        Name: CognitoAuthorizer
+        Type: COGNITO_USER_POOLS
+        IdentitySource: method.request.header.Authorization
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ProviderARNs:
+          - Fn::GetAtt: [CognitoUserPool, Arn]
+
+  Outputs:
+    UserPoolId:
+      Value:
+        Ref: CognitoUserPool
+      Export:
+        Name: ${self:service}-${self:custom.stage}-UserPoolId
+
+    UserPoolClientId:
+      Value:
+        Ref: CognitoUserPoolClient
+      Export:
+        Name: ${self:service}-${self:custom.stage}-UserPoolClientId

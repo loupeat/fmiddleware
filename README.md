@@ -617,50 +617,77 @@ export const main = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 };
 ```
 
-### Splitting by Route Prefix
+### Splitting by Authentication Context
 
-For larger APIs, you can split handlers by route prefix to optimize cold starts:
+A common pattern is to split Lambda functions by authentication context rather than by resource. This approach:
+
+- **Optimizes cold starts**: Public handlers don't load auth processors
+- **Improves security**: Authentication code is isolated to protected functions
+- **Enables different configurations**: More memory/timeout for authenticated requests
 
 **serverless.yml:**
 
 ```yaml
 functions:
-  notes:
-    handler: src/handlers/notes.handler
+  # Public endpoints - no authentication
+  public:
+    handler: src/lambda.publicHandler
     events:
       - http:
           method: any
-          path: "api/notes/{proxy+}"
+          path: "api/public/{proxy+}"
           cors: true
+    timeout: 15
+    memorySize: 256
 
-  users:
-    handler: src/handlers/users.handler
+  # Private endpoints - requires JWT
+  private:
+    handler: src/lambda.privateHandler
     events:
       - http:
           method: any
-          path: "api/users/{proxy+}"
+          path: "api/private/{proxy+}"
           cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: ApiGatewayAuthorizer
+    timeout: 30
+    memorySize: 512
 ```
 
-**src/handlers/notes.ts:**
+**src/lambda.ts:**
 
 ```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { FAWSLambdaMiddleware } from "@loupeat/fmiddleware";
-import { registerNotesApi } from "../notes-api";
+import { registerApi } from "./api";
 
-let api: FAWSLambdaMiddleware;
+let publicApi: FAWSLambdaMiddleware;
+let privateApi: FAWSLambdaMiddleware;
 
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-  if (!api) {
-    api = new FAWSLambdaMiddleware();
-    api.setPathPrefix("/api/notes"); // Only register matching routes
-    registerNotesApi(api);
+// Public handler - no auth required
+export const publicHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  if (!publicApi) {
+    publicApi = new FAWSLambdaMiddleware();
+    publicApi.setPathPrefix("/api/public");
+    registerApi(publicApi);
   }
+  return publicApi.process(event);
+};
 
-  return api.process(event);
+// Private handler - JWT validated by API Gateway
+export const privateHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  if (!privateApi) {
+    privateApi = new FAWSLambdaMiddleware();
+    privateApi.setPathPrefix("/api/private");
+    registerApi(privateApi);
+  }
+  return privateApi.process(event);
 };
 ```
+
+The `setPathPrefix()` method ensures each Lambda only registers handlers matching its prefix, reducing initialization time and memory usage.
 
 ## Express.js Integration
 

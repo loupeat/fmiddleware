@@ -1,0 +1,30 @@
+{
+  "name": "fmiddleware-notes-api-example",
+  "version": "1.0.0",
+  "description": "Example Notes API using @loupeat/fmiddleware - deploys to both Express.js and AWS Lambda",
+  "main": "dist/express.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/express.js",
+    "dev": "ts-node src/express.ts",
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod"
+  },
+  "dependencies": {
+    "@loupeat/fmiddleware": "^1.0.0",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.17.0",
+    "serverless": "^3.39.0",
+    "serverless-esbuild": "^1.52.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
