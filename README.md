@@ -43,7 +43,7 @@ interface Note {
 // Register a simple GET endpoint
 api.get("/api/notes", async (request: FRequest<any, any>) => {
   const notes: Note[] = [{ id: "1", title: "Hello World" }];
-  return api.responses.OK(request, notes);
+  return api.responses.OK<any, Note[]>(request, notes);
 });
 
 // Use FMiddleware as Express middleware
@@ -71,7 +71,7 @@ const api = new FAWSLambdaMiddleware();
 
 api.get("/api/notes", async (request: FRequest<any, any>) => {
   const notes: Note[] = [{ id: "1", title: "Hello World" }];
-  return api.responses.OK(request, notes);
+  return api.responses.OK<any, Note[]>(request, notes);
 });
 
 export const handler: APIGatewayProxyHandler = async (event) => {
@@ -107,7 +107,7 @@ api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
     return api.responses.NotFound(request, `Note ${noteId} not found`);
   }
 
-  return api.responses.OK(request, note);
+  return api.responses.OK<any, Note>(request, note);
 });
 ```
 
@@ -116,11 +116,15 @@ api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
 Capture multiple path segments using `{paramName+}`:
 
 ```typescript
+interface FilePathResponse {
+  filepath: string;
+}
+
 api.get("/api/files/{filepath+}", async (request: FRequest<any, any>) => {
   // For /api/files/documents/2024/report.pdf
   // filepath = "documents/2024/report.pdf"
   const filepath = api.pathParameter(request, "filepath");
-  return api.responses.OK(request, { filepath });
+  return api.responses.OK<any, FilePathResponse>(request, { filepath });
 });
 ```
 
@@ -135,7 +139,7 @@ api.get("/api/notes/search", async (request: FRequest<any, any>) => {
   const tag = api.queryStringParameterOptional(request, "tag");
 
   const results = await notesService.search(query, tag);
-  return api.responses.OK(request, results);
+  return api.responses.OK<any, Note[]>(request, results);
 });
 ```
 
@@ -181,7 +185,7 @@ api.post("/api/notes", async (request: FRequest<any, CreateNoteRequest>) => {
   // request.body is validated against the schema and typed
   const { title, content, tags } = request.body;
   const note = await notesService.create({ title, content, tags });
-  return api.responses.OK(request, note);
+  return api.responses.OK<CreateNoteRequest, Note>(request, note);
 }, CreateNoteSchema);
 ```
 
@@ -263,7 +267,7 @@ api.addRequestPreProcessor(AuthPreProcessor);
 api.get("/api/notes", async (request: FRequest<any, any>) => {
   const user = api.context<User>(request, "user");
   const notes = await notesService.listByUser(user.id);
-  return api.responses.OK(request, notes);
+  return api.responses.OK<any, Note[]>(request, notes);
 });
 ```
 
@@ -336,18 +340,23 @@ api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
     throw new ForbiddenError("You don't have access to this note");
   }
 
-  return api.responses.OK(request, note);
+  return api.responses.OK<any, Note>(request, note);
 });
 ```
 
 ## Response Helpers
 
 ```typescript
-// 200 OK with body
-api.responses.OK(request, { id: "1", title: "Hello" });
+interface Note {
+  id: string;
+  title: string;
+}
+
+// 200 OK with typed body
+api.responses.OK<any, Note>(request, { id: "1", title: "Hello" });
 
 // 200 OK with custom headers
-api.responses.OK(request, data, { "Cache-Control": "max-age=60" });
+api.responses.OK<any, Note>(request, note, { "Cache-Control": "max-age=60" });
 
 // 204 No Content
 api.responses.NoContent(request);
@@ -358,8 +367,8 @@ api.responses.BadRequest(request, "Invalid input");
 // 404 Not Found
 api.responses.NotFound(request, "Resource not found");
 
-// Custom status code
-api.responses._(request, 201, { id: "1", title: "Created" });
+// Custom status code with typed body
+api.responses._<any, Note>(request, 201, { id: "1", title: "Created" });
 ```
 
 ## Complete Example: Notes API
@@ -713,7 +722,7 @@ Both `FExpressMiddleware` and `FAWSLambdaMiddleware` set CORS headers by default
 You can add custom headers to responses:
 
 ```typescript
-api.responses.OK(request, data, api.headers({
+api.responses.OK<any, Note>(request, note, api.headers({
   "Cache-Control": "max-age=60",
   "X-Custom-Header": "value"
 }));
