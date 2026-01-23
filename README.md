@@ -30,14 +30,19 @@ npm install --save-dev @types/aws-lambda
 
 ```typescript
 import express from "express";
-import { FExpressMiddleware } from "@loupeat/fmiddleware";
+import { FExpressMiddleware, FRequest } from "@loupeat/fmiddleware";
 
 const app = express();
 const api = new FExpressMiddleware();
 
+interface Note {
+  id: string;
+  title: string;
+}
+
 // Register a simple GET endpoint
-api.get("/api/notes", async (request) => {
-  const notes = [{ id: "1", title: "Hello World" }];
+api.get("/api/notes", async (request: FRequest<any, any>) => {
+  const notes: Note[] = [{ id: "1", title: "Hello World" }];
   return api.responses.OK(request, notes);
 });
 
@@ -55,12 +60,17 @@ app.listen(3000);
 
 ```typescript
 import { APIGatewayProxyHandler } from "aws-lambda";
-import { FAWSLambdaMiddleware } from "@loupeat/fmiddleware";
+import { FAWSLambdaMiddleware, FRequest } from "@loupeat/fmiddleware";
+
+interface Note {
+  id: string;
+  title: string;
+}
 
 const api = new FAWSLambdaMiddleware();
 
-api.get("/api/notes", async (request) => {
-  const notes = [{ id: "1", title: "Hello World" }];
+api.get("/api/notes", async (request: FRequest<any, any>) => {
+  const notes: Note[] = [{ id: "1", title: "Hello World" }];
   return api.responses.OK(request, notes);
 });
 
@@ -87,7 +97,9 @@ api.delete(path, handler);
 Capture dynamic segments using `{paramName}` syntax:
 
 ```typescript
-api.get("/api/notes/{noteId}", async (request) => {
+import { FRequest } from "@loupeat/fmiddleware";
+
+api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
   const noteId = api.pathParameter(request, "noteId");
   const note = await notesService.get(noteId);
 
@@ -104,7 +116,7 @@ api.get("/api/notes/{noteId}", async (request) => {
 Capture multiple path segments using `{paramName+}`:
 
 ```typescript
-api.get("/api/files/{filepath+}", async (request) => {
+api.get("/api/files/{filepath+}", async (request: FRequest<any, any>) => {
   // For /api/files/documents/2024/report.pdf
   // filepath = "documents/2024/report.pdf"
   const filepath = api.pathParameter(request, "filepath");
@@ -115,7 +127,7 @@ api.get("/api/files/{filepath+}", async (request) => {
 ### Query Parameters
 
 ```typescript
-api.get("/api/notes/search", async (request) => {
+api.get("/api/notes/search", async (request: FRequest<any, any>) => {
   // Required parameter - throws ValidationError if missing
   const query = api.queryStringParameter(request, "q");
 
@@ -144,6 +156,14 @@ FMiddleware supports wildcards for pre/post-processors:
 Validate request bodies using JSON Schema (Draft-07):
 
 ```typescript
+import { FRequest } from "@loupeat/fmiddleware";
+
+interface CreateNoteRequest {
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
 const CreateNoteSchema = {
   type: "object",
   properties: {
@@ -157,8 +177,8 @@ const CreateNoteSchema = {
   required: ["title", "content"]
 };
 
-api.post("/api/notes", async (request) => {
-  // request.body is validated against the schema
+api.post("/api/notes", async (request: FRequest<any, CreateNoteRequest>) => {
+  // request.body is validated against the schema and typed
   const { title, content, tags } = request.body;
   const note = await notesService.create({ title, content, tags });
   return api.responses.OK(request, note);
@@ -200,13 +220,28 @@ const schema = {
 Pre-processors run before the handler and can enrich the request context:
 
 ```typescript
-import { RequestPreProcessor, AuthenticationError } from "@loupeat/fmiddleware";
+import {
+  FMiddleware,
+  FRequest,
+  FHandler,
+  RequestPreProcessor,
+  AuthenticationError
+} from "@loupeat/fmiddleware";
+
+interface User {
+  id: string;
+  email: string;
+}
 
 const AuthPreProcessor: RequestPreProcessor = {
   name: "AuthPreProcessor",
   pathPatterns: ["/api/notes/**"],
   requestSource: "*", // "express", "aws-lambda", or "*" for both
-  process: async (api, request, handler) => {
+  process: async (
+    api: FMiddleware<any, any>,
+    request: FRequest<any, any>,
+    handler: FHandler<any, any>
+  ) => {
     const authHeader = request.headers["authorization"];
 
     if (!authHeader) {
@@ -225,7 +260,7 @@ const AuthPreProcessor: RequestPreProcessor = {
 api.addRequestPreProcessor(AuthPreProcessor);
 
 // Access context in handlers
-api.get("/api/notes", async (request) => {
+api.get("/api/notes", async (request: FRequest<any, any>) => {
   const user = api.context<User>(request, "user");
   const notes = await notesService.listByUser(user.id);
   return api.responses.OK(request, notes);
@@ -251,13 +286,13 @@ const MyPreProcessor: RequestPreProcessor = {
 Post-processors run after the handler and can transform responses or handle errors:
 
 ```typescript
-import { ResponsePostProcessor } from "@loupeat/fmiddleware";
+import { FMiddleware, FResponse, ResponsePostProcessor } from "@loupeat/fmiddleware";
 
 const LoggingPostProcessor: ResponsePostProcessor = {
   name: "LoggingPostProcessor",
   pathPatterns: ["/**"],
   requestSource: "*",
-  process: async (api, response) => {
+  process: async (api: FMiddleware<any, any>, response: FResponse<any, any, any>) => {
     console.log(`${response.request.httpMethod} ${response.request.path} - ${response.statusCode}`);
 
     if (response.error) {
@@ -275,14 +310,19 @@ FMiddleware provides semantic error classes that automatically map to HTTP statu
 
 ```typescript
 import {
-  ValidationError,    // 400 Bad Request
+  FRequest,
+  ValidationError,     // 400 Bad Request
   AuthenticationError, // 401 Unauthorized
   ForbiddenError,      // 403 Forbidden
   NotFoundError,       // 404 Not Found
   ConflictError        // 409 Conflict
 } from "@loupeat/fmiddleware";
 
-api.get("/api/notes/{noteId}", async (request) => {
+interface User {
+  id: string;
+}
+
+api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
   const noteId = api.pathParameter(request, "noteId");
   const user = api.context<User>(request, "user");
 
@@ -329,6 +369,9 @@ Here's a complete example of a Notes API with authentication:
 ```typescript
 import {
   FExpressMiddleware,
+  FMiddleware,
+  FRequest,
+  FHandler,
   RequestPreProcessor,
   AuthenticationError,
   NotFoundError,
@@ -348,6 +391,18 @@ interface Note {
   title: string;
   content: string;
   tags: string[];
+}
+
+interface CreateNoteRequest {
+  title: string;
+  content: string;
+  tags?: string[];
+}
+
+interface UpdateNoteRequest {
+  title?: string;
+  content?: string;
+  tags?: string[];
 }
 
 // Schemas
@@ -378,7 +433,11 @@ const AuthPreProcessor: RequestPreProcessor = {
   name: "AuthPreProcessor",
   pathPatterns: ["/api/notes/**", "/api/notes"],
   requestSource: "*",
-  process: async (_api, request, _handler) => {
+  process: async (
+    _api: FMiddleware<any, any>,
+    request: FRequest<any, any>,
+    _handler: FHandler<any, any>
+  ) => {
     const authHeader = request.headers["authorization"];
     if (!authHeader) {
       throw new AuthenticationError("Missing authorization header");
@@ -396,14 +455,14 @@ api.addRequestPreProcessor(AuthPreProcessor);
 export function registerNotesApi(api: FExpressMiddleware) {
 
   // List all notes for user
-  api.get("/api/notes", async (request) => {
+  api.get("/api/notes", async (request: FRequest<any, any>) => {
     const user = api.context<User>(request, "user");
     const notes = await notesService.listByUser(user.id);
-    return api.responses.OK(request, notes);
+    return api.responses.OK<any, Note[]>(request, notes);
   });
 
   // Create a new note
-  api.post("/api/notes", async (request) => {
+  api.post("/api/notes", async (request: FRequest<any, CreateNoteRequest>) => {
     const user = api.context<User>(request, "user");
     const { title, content, tags } = request.body;
 
@@ -414,11 +473,11 @@ export function registerNotesApi(api: FExpressMiddleware) {
       tags: tags || []
     });
 
-    return api.responses.OK(request, note);
+    return api.responses.OK<CreateNoteRequest, Note>(request, note);
   }, CreateNoteSchema);
 
   // Get a specific note
-  api.get("/api/notes/{noteId}", async (request) => {
+  api.get("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
     const user = api.context<User>(request, "user");
     const noteId = api.pathParameter(request, "noteId");
     validator.validateUuid(noteId);
@@ -433,11 +492,11 @@ export function registerNotesApi(api: FExpressMiddleware) {
       throw new ForbiddenError("Access denied");
     }
 
-    return api.responses.OK(request, note);
+    return api.responses.OK<any, Note>(request, note);
   });
 
   // Update a note
-  api.put("/api/notes/{noteId}", async (request) => {
+  api.put("/api/notes/{noteId}", async (request: FRequest<any, UpdateNoteRequest>) => {
     const user = api.context<User>(request, "user");
     const noteId = api.pathParameter(request, "noteId");
     validator.validateUuid(noteId);
@@ -453,11 +512,11 @@ export function registerNotesApi(api: FExpressMiddleware) {
     }
 
     const updated = await notesService.update(noteId, request.body);
-    return api.responses.OK(request, updated);
+    return api.responses.OK<UpdateNoteRequest, Note>(request, updated);
   }, UpdateNoteSchema);
 
   // Delete a note
-  api.delete("/api/notes/{noteId}", async (request) => {
+  api.delete("/api/notes/{noteId}", async (request: FRequest<any, any>) => {
     const user = api.context<User>(request, "user");
     const noteId = api.pathParameter(request, "noteId");
     validator.validateUuid(noteId);
@@ -477,13 +536,13 @@ export function registerNotesApi(api: FExpressMiddleware) {
   });
 
   // Search notes
-  api.get("/api/notes/search", async (request) => {
+  api.get("/api/notes/search", async (request: FRequest<any, any>) => {
     const user = api.context<User>(request, "user");
     const query = api.queryStringParameterOptional(request, "q") || "";
     const tag = api.queryStringParameterOptional(request, "tag");
 
     const notes = await notesService.search(user.id, { query, tag });
-    return api.responses.OK(request, notes);
+    return api.responses.OK<any, Note[]>(request, notes);
   });
 }
 ```
@@ -532,13 +591,13 @@ functions:
 **src/handler.ts:**
 
 ```typescript
-import { APIGatewayProxyHandler } from "aws-lambda";
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { FAWSLambdaMiddleware } from "@loupeat/fmiddleware";
 import { registerNotesApi } from "./notes-api";
 
 let api: FAWSLambdaMiddleware;
 
-export const main: APIGatewayProxyHandler = async (event) => {
+export const main = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   // Initialize once per cold start
   if (!api) {
     api = new FAWSLambdaMiddleware();
@@ -577,12 +636,13 @@ functions:
 **src/handlers/notes.ts:**
 
 ```typescript
-import { APIGatewayProxyHandler } from "aws-lambda";
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { FAWSLambdaMiddleware } from "@loupeat/fmiddleware";
+import { registerNotesApi } from "../notes-api";
 
 let api: FAWSLambdaMiddleware;
 
-export const handler: APIGatewayProxyHandler = async (event) => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   if (!api) {
     api = new FAWSLambdaMiddleware();
     api.setPathPrefix("/api/notes"); // Only register matching routes
@@ -598,8 +658,8 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 **src/app.ts:**
 
 ```typescript
-import express from "express";
-import { FExpressMiddleware } from "@loupeat/fmiddleware";
+import express, { Request, Response } from "express";
+import { FExpressMiddleware, FResponse } from "@loupeat/fmiddleware";
 import { registerNotesApi } from "./notes-api";
 
 const app = express();
@@ -612,8 +672,8 @@ registerNotesApi(api);
 app.use(express.json());
 
 // Route all requests through FMiddleware
-app.use(async (req, res) => {
-  const response = await api.process(req);
+app.use(async (req: Request, res: Response) => {
+  const response: FResponse<any, any, any> = await api.process(req);
 
   // Set headers
   for (const [key, value] of Object.entries(response.headers)) {
@@ -661,6 +721,19 @@ api.responses.OK(request, data, api.headers({
 
 ## API Reference
 
+### Core Types
+
+```typescript
+// Request type with generics for original request and body type
+FRequest<OriginalRequestType, RequestBodyType>
+
+// Response type with generics
+FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
+
+// Handler function signature
+(request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>
+```
+
 ### FMiddleware
 
 | Method | Description |
@@ -674,8 +747,13 @@ api.responses.OK(request, data, api.headers({
 | `pathParameter(request, name)` | Get path parameter value |
 | `queryStringParameter(request, name)` | Get required query parameter |
 | `queryStringParameterOptional(request, name)` | Get optional query parameter |
-| `context<T>(request, key)` | Get value from request context |
+| `context<T>(request, key)` | Get typed value from request context |
 | `setPathPrefix(prefix)` | Only register handlers matching prefix |
+| `responses.OK<Req, Res>(request, body)` | Return 200 with typed response |
+| `responses.NoContent(request)` | Return 204 |
+| `responses.NotFound(request, message)` | Return 404 |
+| `responses.BadRequest(request, message)` | Return 400 |
+| `responses._(request, status, body)` | Return custom status code |
 
 ### Error Classes
 
