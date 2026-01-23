@@ -12,7 +12,7 @@
  */
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { FAWSLambdaMiddleware } from "@loupeat/fmiddleware";
+import { FAWSLambdaMiddleware, logger } from "@loupeat/fmiddleware";
 import { registerApi } from "./api";
 
 // Separate middleware instances per Lambda function
@@ -30,7 +30,7 @@ export const publicHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         publicApi = new FAWSLambdaMiddleware();
         publicApi.setPathPrefix("/api/public"); // Only register matching routes
         registerApi(publicApi);
-        console.log(`Public API initialized with ${publicApi.getHandlers().length} handlers`);
+        logger.info(`Public API initialized with ${publicApi.getHandlers().length} handlers`);
     }
 
     return publicApi.process(event);
@@ -45,7 +45,7 @@ export const privateHandler = async (event: APIGatewayProxyEvent): Promise<APIGa
         privateApi = new FAWSLambdaMiddleware();
         privateApi.setPathPrefix("/api/private"); // Only register matching routes
         registerApi(privateApi);
-        console.log(`Private API initialized with ${privateApi.getHandlers().length} handlers`);
+        logger.info(`Private API initialized with ${privateApi.getHandlers().length} handlers`);
     }
 
     return privateApi.process(event);

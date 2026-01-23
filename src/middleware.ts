@@ -353,7 +353,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         const handler = this.findHandler(request);
         if (!handler) {
             await logger.warn(`No handler found for path ${Helper.logHttpMethod(request.httpMethod)}: ${request.path}`);
-            return this.error(request, 404, "Not found", `No handler found for path ${request.path} and method ${request.httpMethod}`);
+            return this.error(request, 404, "Not found", "The requested resource was not found.");
         }
 
         // Find path parameter like {tenantId} in the handlers path pattern
@@ -427,7 +427,11 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         if (parameterValue == undefined) {
             throw new ValidationError(`Parameter "${parameterName}" not found for ${request.path}`);
         }
-        return decodeURIComponent(parameterValue);
+        try {
+            return decodeURIComponent(parameterValue);
+        } catch {
+            throw new ValidationError(`Invalid URL encoding in parameter "${parameterName}"`);
+        }
     }
 
     queryStringParameter(request: FRequest<any, any>, parameterName: string): string {

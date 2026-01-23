@@ -13,8 +13,7 @@ export class FExpressMiddleware extends FMiddleware<any, any> {
 
     static headers(): Record<string, string> {
         return {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Origin": "*"
         };
     }
 

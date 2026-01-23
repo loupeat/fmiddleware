@@ -6,7 +6,7 @@
  */
 
 import express, { Request, Response } from "express";
-import { FExpressMiddleware, FResponse } from "@loupeat/fmiddleware";
+import { FExpressMiddleware, FResponse, logger } from "@loupeat/fmiddleware";
 import { registerApi } from "./api";
 
 const app = express();
@@ -15,10 +15,10 @@ const api = new FExpressMiddleware();
 // Register all routes
 registerApi(api);
 
-console.log(`Registered ${api.getHandlers().length} handlers`);
+logger.info(`Registered ${api.getHandlers().length} handlers`);
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies (10MB limit to match API Gateway)
+app.use(express.json({ type: "application/json", limit: "10mb" }));
 
 // Route all /api requests through FMiddleware
 app.use("/api", async (req: Request, res: Response) => {
@@ -40,11 +40,11 @@ app.use("/api", async (req: Request, res: Response) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Notes API running on http://localhost:${PORT}`);
-    console.log(`\nEndpoints:`);
-    console.log(`  Public:  GET  http://localhost:${PORT}/api/public/health`);
-    console.log(`  Public:  GET  http://localhost:${PORT}/api/public/info`);
-    console.log(`  Private: GET  http://localhost:${PORT}/api/private/me (requires JWT)`);
-    console.log(`  Private: GET  http://localhost:${PORT}/api/private/notes (requires JWT)`);
-    console.log(`\nSet COGNITO_REGION and COGNITO_USER_POOL_ID for JWT verification.`);
+    logger.info(`Notes API running on http://localhost:${PORT}`);
+    logger.info(`Endpoints:`);
+    logger.info(`  Public:  GET  http://localhost:${PORT}/api/public/health`);
+    logger.info(`  Public:  GET  http://localhost:${PORT}/api/public/info`);
+    logger.info(`  Private: GET  http://localhost:${PORT}/api/private/me (requires JWT)`);
+    logger.info(`  Private: GET  http://localhost:${PORT}/api/private/notes (requires JWT)`);
+    logger.info(`Set COGNITO_REGION and COGNITO_USER_POOL_ID for JWT verification.`);
 });

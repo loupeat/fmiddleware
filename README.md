@@ -128,6 +128,19 @@ api.get("/api/files/{filepath+}", async (request: FRequest<any, any>) => {
 });
 ```
 
+> **Security Warning:** Path parameters can contain traversal sequences like `../`. If you use path parameters for file system operations, always validate that the resolved path stays within your intended directory:
+> ```typescript
+> import * as path from "path";
+>
+> const baseDir = "/var/uploads";
+> const userPath = api.pathParameter(request, "filepath");
+> const resolved = path.resolve(baseDir, userPath);
+>
+> if (!resolved.startsWith(baseDir)) {
+>   throw new ForbiddenError("Invalid file path");
+> }
+> ```
+
 ### Query Parameters
 
 ```typescript
@@ -724,6 +737,8 @@ app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
 });
 ```
+
+> **Security Note:** `request.sourceIp` in Express comes from `request.ip`, which respects the `X-Forwarded-For` header if `trust proxy` is enabled. If your Express app runs behind a reverse proxy (nginx, load balancer), configure `trust proxy` correctly. If running without a proxy, ensure `trust proxy` is disabled to prevent IP spoofing via the `X-Forwarded-For` header. See [Express trust proxy documentation](https://expressjs.com/en/guide/behind-proxies.html).
 
 ## Configuration
 
