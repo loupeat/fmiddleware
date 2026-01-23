@@ -1,0 +1,48 @@
+{
+  "name": "@loupeat/fmiddleware",
+  "version": "1.0.0",
+  "description": "Framework-agnostic HTTP middleware for Express and AWS Lambda",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "middleware",
+    "express",
+    "lambda",
+    "api",
+    "http"
+  ],
+  "author": "loupeat",
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "axe": "^11.0.1",
+    "chalk": "^4.1.2",
+    "luxon": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.160",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^20.17.12",
+    "typescript": "^5.7.3"
+  },
+  "peerDependencies": {
+    "@types/aws-lambda": "^8.x"
+  },
+  "peerDependenciesMeta": {
+    "@types/aws-lambda": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loupeat/fmiddleware.git"
+  }
+}
