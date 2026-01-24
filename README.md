@@ -48,9 +48,12 @@ api.get("/api/notes", async (request: FRequest<any, any>) => {
 
 // Use FMiddleware as Express middleware
 app.use(express.json());
-app.use(async (req, res) => {
+app.all("*", async (req, res) => {
   const response = await api.process(req);
-  res.status(response.statusCode).set(response.headers).json(response.body);
+  for (const [key, value] of Object.entries(response.headers || {})) {
+    res.setHeader(key, value as string);
+  }
+  res.status(response.statusCode).json(response.body);
 });
 
 app.listen(3000);
@@ -721,12 +724,12 @@ registerNotesApi(api);
 app.use(express.json());
 
 // Route all requests through FMiddleware
-app.use(async (req: Request, res: Response) => {
+app.all("*", async (req: Request, res: Response) => {
   const response: FResponse<any, any, any> = await api.process(req);
 
   // Set headers
-  for (const [key, value] of Object.entries(response.headers)) {
-    res.setHeader(key, value);
+  for (const [key, value] of Object.entries(response.headers || {})) {
+    res.setHeader(key, value as string);
   }
 
   // Send response
@@ -752,12 +755,11 @@ LOG_LEVEL=debug  # debug, info, warn, error
 
 ### Default Headers
 
-Both `FExpressMiddleware` and `FAWSLambdaMiddleware` set CORS headers by default:
+Both `FExpressMiddleware` and `FAWSLambdaMiddleware` set a CORS header by default:
 
 ```typescript
 {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Credentials": "true"
+  "Access-Control-Allow-Origin": "*"
 }
 ```
 

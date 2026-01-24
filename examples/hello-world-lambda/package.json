@@ -1,0 +1,21 @@
+{
+  "name": "hello-world-lambda",
+  "version": "1.0.0",
+  "description": "Minimal AWS Lambda API using @loupeat/fmiddleware",
+  "main": "index.ts",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod"
+  },
+  "dependencies": {
+    "@loupeat/fmiddleware": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.17.0",
+    "serverless": "^3.39.0",
+    "serverless-esbuild": "^1.52.0",
+    "typescript": "^5.7.0"
+  }
+}
