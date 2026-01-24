@@ -23,6 +23,21 @@ api.get("/hello", async (request) => {
 app.use("/api", async (req: Request, res: Response) => {
     const response = await api.process(req);
 
+    // Apply headers returned by the middleware (e.g., CORS headers)
+    if (response.headers) {
+        for (const [name, value] of Object.entries(response.headers)) {
+            if (value !== undefined) {
+                res.setHeader(name, String(value));
+            }
+        }
+    }
+
+    // Handle 204 No Content responses without a body
+    if (response.statusCode === 204) {
+        res.status(204).end();
+        return;
+    }
+
     // Apply response headers (including CORS)
     for (const [key, value] of Object.entries(response.headers || {})) {
         res.setHeader(key, value as string);
