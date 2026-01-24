@@ -20,8 +20,8 @@ logger.info(`Registered ${api.getHandlers().length} handlers`);
 // Parse JSON bodies (10MB limit to match API Gateway)
 app.use(express.json({ type: "application/json", limit: "10mb" }));
 
-// Route all /api requests through FMiddleware
-app.use("/api", async (req: Request, res: Response) => {
+// Let the middleware handle all routing
+app.all("*", async (req: Request, res: Response) => {
     const response: FResponse<any, any, any> = await api.process(req);
 
     // Set response headers
