@@ -31,13 +31,6 @@ Response:
 - Registers a single GET route at `/hello`
 - Exports a Lambda handler that processes API Gateway events
 
-## Local Testing
+## Local Development
 
-The `serverless-offline` plugin is already configured. To test locally:
-
-```bash
-npm install
-npx serverless offline
-```
-
-Then visit `http://localhost:3000/dev/hello`
+Since `@loupeat/fmiddleware` is framework-agnostic, use the Express example for local development - the same API code works on both platforms. See `../hello-world-express/`.
