@@ -22,6 +22,12 @@ api.get("/api/hello", async (request) => {
 // Let the middleware handle all routing
 app.all("*", async (req: Request, res: Response) => {
     const response = await api.process(req);
+
+    // Apply response headers (e.g. CORS)
+    for (const [key, value] of Object.entries(response.headers || {})) {
+        res.setHeader(key, value as string);
+    }
+
     res.status(response.statusCode).json(response.body);
 });
 
