@@ -48,9 +48,9 @@ api.get("/api/notes", async (request: FRequest<any, any>) => {
 
 // Use FMiddleware as Express middleware
 app.use(express.json());
-app.all("*", async (req, res) => {
+app.use(async (req, res) => {
   const response = await api.process(req);
-  res.status(response.statusCode).json(response.body);
+  res.status(response.statusCode).set(response.headers).json(response.body);
 });
 
 app.listen(3000);
@@ -721,8 +721,15 @@ registerNotesApi(api);
 app.use(express.json());
 
 // Route all requests through FMiddleware
-app.all("*", async (req: Request, res: Response) => {
+app.use(async (req: Request, res: Response) => {
   const response: FResponse<any, any, any> = await api.process(req);
+
+  // Set headers
+  for (const [key, value] of Object.entries(response.headers)) {
+    res.setHeader(key, value);
+  }
+
+  // Send response
   res.status(response.statusCode).json(response.body);
 });
 
@@ -743,7 +750,16 @@ Set the log level via environment variable:
 LOG_LEVEL=debug  # debug, info, warn, error
 ```
 
-### Custom Headers
+### Default Headers
+
+Both `FExpressMiddleware` and `FAWSLambdaMiddleware` set CORS headers by default:
+
+```typescript
+{
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Credentials": "true"
+}
+```
 
 You can add custom headers to responses:
 
