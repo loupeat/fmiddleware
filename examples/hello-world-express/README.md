@@ -27,5 +27,5 @@ Response:
 
 - Creates an Express app and FExpressMiddleware instance
 - Registers a single GET route at `/api/hello`
-- Routes all `/api/*` requests through the middleware
+- Uses `app.all("*")` to let the middleware handle all routing
 - Starts the server on port 3000

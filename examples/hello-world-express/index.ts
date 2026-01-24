@@ -12,15 +12,15 @@ const app = express();
 const api = new FExpressMiddleware();
 
 // Define a simple route
-api.get("/hello", async (request) => {
+api.get("/api/hello", async (request) => {
     return api.responses.OK(request, {
         message: "Hello, World!",
         timestamp: new Date().toISOString()
     });
 });
 
-// Route all /api requests through the middleware
-app.use("/api", async (req: Request, res: Response) => {
+// Let the middleware handle all routing
+app.all("*", async (req: Request, res: Response) => {
     const response = await api.process(req);
     res.status(response.statusCode).json(response.body);
 });
