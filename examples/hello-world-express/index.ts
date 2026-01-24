@@ -12,7 +12,7 @@ const app = express();
 const api = new FExpressMiddleware();
 
 // Define a simple route
-api.get("/api/hello", async (request) => {
+api.get("/hello", async (request) => {
     return api.responses.OK(request, {
         message: "Hello, World!",
         timestamp: new Date().toISOString()
@@ -22,7 +22,18 @@ api.get("/api/hello", async (request) => {
 // Route all /api requests through the middleware
 app.use("/api", async (req: Request, res: Response) => {
     const response = await api.process(req);
-    res.status(response.statusCode).json(response.body);
+
+    // Apply response headers (including CORS)
+    for (const [key, value] of Object.entries(response.headers || {})) {
+        res.setHeader(key, value as string);
+    }
+
+    // Handle 204 No Content (no body)
+    if (response.statusCode === 204) {
+        res.status(204).end();
+    } else {
+        res.status(response.statusCode).json(response.body);
+    }
 });
 
 // Start server

@@ -30,13 +30,14 @@ Response:
 - Creates an FAWSLambdaMiddleware instance
 - Registers a single GET route at `/hello`
 - Exports a Lambda handler that processes API Gateway events
-- That's it - just 15 lines of code!
 
 ## Local Testing
 
-You can test locally with serverless-offline:
+The `serverless-offline` plugin is already configured. To test locally:
 
 ```bash
-npm install -D serverless-offline
+npm install
 npx serverless offline
 ```
+
+Then visit `http://localhost:3000/dev/hello`
