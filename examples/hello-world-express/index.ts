@@ -43,12 +43,7 @@ app.use("/api", async (req: Request, res: Response) => {
         res.setHeader(key, value as string);
     }
 
-    // Handle 204 No Content (no body)
-    if (response.statusCode === 204) {
-        res.status(204).end();
-    } else {
-        res.status(response.statusCode).json(response.body);
-    }
+    res.status(response.statusCode).json(response.body);
 });
 
 // Start server
