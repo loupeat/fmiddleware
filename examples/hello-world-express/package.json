@@ -1,0 +1,21 @@
+{
+  "name": "hello-world-express",
+  "version": "1.0.0",
+  "description": "Minimal Express.js API using @loupeat/fmiddleware",
+  "main": "index.ts",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "build": "tsc",
+    "serve": "node dist/index.js"
+  },
+  "dependencies": {
+    "@loupeat/fmiddleware": "^1.0.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.17.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
