@@ -100,15 +100,9 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes "## Changes
 Refs loupeat/app#ISSUE_NUMBER"
 ```
 
-### 6. Publish to npm
+The Github release automatically publishes the package to npm via CI.
 
-```bash
-npm publish
-```
-
-Note: You need to be logged in to npm with appropriate permissions.
-
-### 7. Update consuming projects
+### 6. Update consuming projects
 
 In projects that use this package:
 
