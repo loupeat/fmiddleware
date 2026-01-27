@@ -18,6 +18,13 @@ export class FExpressMiddleware extends FMiddleware<any, any> {
     }
 
     /**
+     * Set default headers for the middleware.
+     */
+    constructor() {
+        super(FExpressMiddleware.headers());
+    }
+
+    /**
      * Extracts the HTTP method from the Express request and maps it to the FHttpMethod enum.
      *
      * @param expressMethod
