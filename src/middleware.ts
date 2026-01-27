@@ -6,6 +6,7 @@ import {
 } from "./default-impl";
 import {DateTime} from "luxon";
 import {logger} from "./logger";
+import {OpenAPIMetadata} from "./openapi/types";
 
 const luxonDate = () => DateTime.local();
 
@@ -174,6 +175,8 @@ export interface FHandler<RequestBodyType, ResponseBodyType> {
     httpMethod: FHttpMethod;
     process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>;
     schema?: any;
+    /** OpenAPI metadata for documentation generation */
+    openapi?: OpenAPIMetadata;
 
 }
 
@@ -263,7 +266,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         return this.handlers;
     }
 
-    rest<RequestBodyType, ResponseBodyType>(pathPattern: string, httpMethod: FHttpMethod, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any) {
+    rest<RequestBodyType, ResponseBodyType>(pathPattern: string, httpMethod: FHttpMethod, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any, openapi?: OpenAPIMetadata) {
         if ((httpMethod == FHttpMethod.POST || httpMethod == FHttpMethod.PUT) && !schema) {
             logger.warn(`No schema provided for ${Helper.logHttpMethod(httpMethod)}: ${pathPattern}. This may lead to validation issues.`);
         }
@@ -271,24 +274,25 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
             pathPattern: Helper.stripTrailingSlash(pathPattern),
             httpMethod: httpMethod,
             process: process,
-            schema: schema
+            schema: schema,
+            openapi: openapi
         });
     }
 
-    get<ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, any>) => Promise<FResponse<any, any, ResponseBodyType>>, schema?: any) {
-        this.rest<any, ResponseBodyType>(pathPattern, FHttpMethod.GET, process, schema);
+    get<ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, any>) => Promise<FResponse<any, any, ResponseBodyType>>, openapi?: OpenAPIMetadata) {
+        this.rest<any, ResponseBodyType>(pathPattern, FHttpMethod.GET, process, undefined, openapi);
     }
 
-    post<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any) {
-        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.POST, process, schema);
+    post<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any, openapi?: OpenAPIMetadata) {
+        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.POST, process, schema, openapi);
     }
 
-    put<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any) {
-        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.PUT, process, schema);
+    put<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any, openapi?: OpenAPIMetadata) {
+        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.PUT, process, schema, openapi);
     }
 
-    delete<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any) {
-        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.DELETE, process, schema);
+    delete<RequestBodyType, ResponseBodyType>(pathPattern: string, process: (request: FRequest<any, RequestBodyType>) => Promise<FResponse<any, RequestBodyType, ResponseBodyType>>, schema?: any, openapi?: OpenAPIMetadata) {
+        this.rest<RequestBodyType, ResponseBodyType>(pathPattern, FHttpMethod.DELETE, process, schema, openapi);
     }
 
     addRequestPreProcessor(requestPreProcessor: RequestPreProcessor) {

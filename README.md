@@ -11,6 +11,7 @@ A framework-agnostic HTTP middleware for building APIs that run on both **Expres
 - **Built-in validation**: JSON Schema validation with custom keywords (uuid, email, json)
 - **Typed errors**: Semantic error classes that map to HTTP status codes
 - **TypeScript-first**: Full type safety for requests and responses
+- **OpenAPI generation**: Generate OpenAPI 3.0 specs automatically from handlers
 
 ## Installation
 
@@ -772,6 +773,148 @@ api.responses.OK<any, Note>(request, note, api.headers({
 }));
 ```
 
+## OpenAPI Generation
+
+FMiddleware includes built-in support for generating OpenAPI 3.0 specifications from your registered handlers.
+
+### Adding OpenAPI Metadata to Handlers
+
+You can enrich handlers with OpenAPI metadata for better documentation:
+
+```typescript
+import { FExpressMiddleware, OpenAPIMetadata } from "@loupeat/fmiddleware";
+
+const api = new FExpressMiddleware();
+
+// GET with OpenAPI metadata
+api.get("/api/notes", async (request) => {
+  const notes = await notesService.list();
+  return api.responses.OK(request, notes);
+}, {
+  summary: "List all notes",
+  description: "Retrieves all notes for the authenticated user",
+  tags: ["Notes"],
+  queryParams: [
+    { name: "tag", description: "Filter by tag", required: false },
+    { name: "limit", description: "Max results", schema: { type: "integer" } }
+  ],
+  responseSchema: {
+    type: "array",
+    items: { $ref: "#/components/schemas/Note" }
+  }
+});
+
+// POST with schema and OpenAPI metadata
+api.post("/api/notes", async (request) => {
+  const note = await notesService.create(request.body);
+  return api.responses.OK(request, note);
+}, CreateNoteSchema, {
+  summary: "Create a note",
+  tags: ["Notes"],
+  requestBodyDescription: "Note to create"
+});
+```
+
+### OpenAPI Metadata Options
+
+```typescript
+interface OpenAPIMetadata {
+  summary?: string;           // Brief description
+  description?: string;       // Detailed description
+  tags?: string[];            // Categorization tags
+  operationId?: string;       // Unique operation ID
+  deprecated?: boolean;       // Mark as deprecated
+  queryParams?: QueryParamDef[];  // Query parameter definitions
+  pathParams?: Record<string, PathParamDef>;  // Path parameter descriptions
+  responseSchema?: any;       // JSON Schema for response
+  responses?: Record<string, ResponseDef>;    // Custom response definitions
+  requestBodyDescription?: string;  // Description for request body
+}
+```
+
+### Generating OpenAPI Specifications
+
+Use the `OpenApiGenerator` class to generate specs from your middleware:
+
+```typescript
+import {
+  FExpressMiddleware,
+  OpenApiGenerator,
+  GeneratorConfig
+} from "@loupeat/fmiddleware";
+import * as fs from "fs";
+
+// Initialize and register handlers
+const api = new FExpressMiddleware();
+registerAllRoutes(api);
+
+// Configure the generator
+const config: GeneratorConfig = {
+  info: {
+    title: "My API",
+    version: "1.0.0",
+    description: "API description"
+  },
+  servers: [
+    { url: "https://api.example.com", description: "Production" }
+  ],
+  tags: [
+    { name: "Notes", description: "Note management" }
+  ],
+  securitySchemes: {
+    bearerAuth: {
+      type: "http",
+      scheme: "bearer",
+      bearerFormat: "JWT"
+    }
+  },
+  // Custom security inference based on path
+  securityInference: (path) => {
+    if (path.includes("/public/")) return [];
+    return [{ bearerAuth: [] }];
+  },
+  // Custom tag inference based on path
+  tagInference: (path) => {
+    const match = path.match(/\/api\/(\w+)/);
+    return match ? [match[1]] : ["General"];
+  }
+};
+
+// Generate the spec
+const generator = new OpenApiGenerator(api, config);
+const spec = generator.generate();
+
+// Write to file
+fs.writeFileSync("openapi.json", JSON.stringify(spec, null, 2));
+```
+
+### Generator Config Options
+
+```typescript
+interface GeneratorConfig {
+  info: {
+    title: string;
+    version: string;
+    description?: string;
+  };
+  servers?: Array<{ url: string; description?: string }>;
+  tags?: Array<{ name: string; description?: string }>;
+  securitySchemes?: Record<string, any>;
+  securityInference?: (path: string) => any[];  // Custom security logic
+  tagInference?: (path: string) => string[];    // Custom tag logic
+}
+```
+
+### Automatic Inference
+
+The generator automatically infers:
+
+- **Path parameters** from `{param}` patterns in routes
+- **Operation IDs** from HTTP method + path
+- **Summaries** from HTTP method + resource name
+- **Request body schemas** from handler schema parameter
+- **Standard error responses** (400, 401, 403, 404, 500)
+
 ## API Reference
 
 ### Core Types
@@ -791,10 +934,10 @@ FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
 
 | Method | Description |
 |--------|-------------|
-| `get(path, handler)` | Register GET handler |
-| `post(path, handler, schema?)` | Register POST handler with optional validation |
-| `put(path, handler, schema?)` | Register PUT handler with optional validation |
-| `delete(path, handler)` | Register DELETE handler |
+| `get(path, handler, openapi?)` | Register GET handler with optional OpenAPI metadata |
+| `post(path, handler, schema?, openapi?)` | Register POST handler with validation and OpenAPI metadata |
+| `put(path, handler, schema?, openapi?)` | Register PUT handler with validation and OpenAPI metadata |
+| `delete(path, handler, schema?, openapi?)` | Register DELETE handler with optional OpenAPI metadata |
 | `addRequestPreProcessor(processor)` | Add a pre-processor |
 | `addResponsePostProcessor(processor)` | Add a post-processor |
 | `pathParameter(request, name)` | Get path parameter value |
@@ -802,6 +945,7 @@ FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
 | `queryStringParameterOptional(request, name)` | Get optional query parameter |
 | `context<T>(request, key)` | Get typed value from request context |
 | `setPathPrefix(prefix)` | Only register handlers matching prefix |
+| `getHandlers()` | Get all registered handlers (for OpenAPI generation) |
 | `responses.OK<Req, Res>(request, body)` | Return 200 with typed response |
 | `responses.NoContent(request)` | Return 204 |
 | `responses.NotFound(request, message)` | Return 404 |
@@ -817,6 +961,18 @@ FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
 | `ForbiddenError` | 403 |
 | `NotFoundError` | 404 |
 | `ConflictError` | 409 |
+
+### OpenAPI Types
+
+| Type | Description |
+|------|-------------|
+| `OpenAPIMetadata` | Metadata to attach to handlers for documentation |
+| `QueryParamDef` | Query parameter definition |
+| `PathParamDef` | Path parameter description |
+| `ResponseDef` | Response definition |
+| `OpenAPISpec` | Full OpenAPI 3.0 specification |
+| `GeneratorConfig` | Configuration for OpenApiGenerator |
+| `OpenApiGenerator` | Class to generate OpenAPI specs from middleware |
 
 ## License
 

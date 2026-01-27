@@ -37,3 +37,15 @@ export { Validator, validator } from "./validation";
 
 // Logger
 export { logger } from "./logger";
+
+// OpenAPI
+export {
+    OpenAPIMetadata,
+    QueryParamDef,
+    PathParamDef,
+    ResponseDef,
+    OpenAPISpec,
+    GeneratorConfig
+} from "./openapi/types";
+
+export { OpenApiGenerator } from "./openapi/OpenApiGenerator";
