@@ -36,6 +36,32 @@ export class Validator {
         return true;
     }
 
+    private static validateDate(schema: boolean, data: string): boolean {
+        if (schema) {
+            return /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(data);
+        }
+        return true;
+    }
+
+    private static validateTime(schema: boolean, data: string): boolean {
+        if (schema) {
+            return /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?$/.test(data);
+        }
+        return true;
+    }
+
+    private static validateDatetime(schema: boolean | string, data: string): boolean {
+        if (schema) {
+            const zuluPattern = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?Z$/;
+            if (schema === "zulu") {
+                return zuluPattern.test(data);
+            }
+            const fullPattern = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+            return fullPattern.test(data);
+        }
+        return true;
+    }
+
     constructor() {
         this.ajv = new Ajv();
         this.ajv.addKeyword({
@@ -55,6 +81,24 @@ export class Validator {
             type: "string",
             schemaType: "boolean",
             validate: Validator.validateEmail
+        });
+        this.ajv.addKeyword({
+            keyword: "date",
+            type: "string",
+            schemaType: "boolean",
+            validate: Validator.validateDate
+        });
+        this.ajv.addKeyword({
+            keyword: "time",
+            type: "string",
+            schemaType: "boolean",
+            validate: Validator.validateTime
+        });
+        this.ajv.addKeyword({
+            keyword: "datetime",
+            type: "string",
+            schemaType: ["boolean", "string"],
+            validate: Validator.validateDatetime
         });
     }
 

@@ -361,6 +361,30 @@ export class OpenApiGenerator {
      */
     private convertJsonSchemaToOpenAPI(schema: any): any {
         const { $schema, $id, ...openApiSchema } = schema;
+
+        if (openApiSchema.properties) {
+            for (const prop of Object.values(openApiSchema.properties) as any[]) {
+                if (prop.type === "string") {
+                    if (prop.date) {
+                        prop.format = "date";
+                        delete prop.date;
+                    } else if (prop.time) {
+                        prop.format = "time";
+                        delete prop.time;
+                    } else if (prop.datetime) {
+                        prop.format = "date-time";
+                        delete prop.datetime;
+                    } else if (prop.uuid) {
+                        prop.format = "uuid";
+                        delete prop.uuid;
+                    } else if (prop.email) {
+                        prop.format = "email";
+                        delete prop.email;
+                    }
+                }
+            }
+        }
+
         return openApiSchema;
     }
 
