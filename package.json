@@ -1,6 +1,6 @@
 {
   "name": "@loupeat/fmiddleware",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Framework-agnostic HTTP middleware for Express and AWS Lambda",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
