@@ -17,6 +17,12 @@ export const FMiddlewareDefaultValidationProcessor: RequestPreProcessor = {
     requestSource: "*",
     process: async (_api: FMiddleware<any, any>, request: FRequest<any, any>, handler: FHandler<any, any>): Promise<void> => {
         if (handler.schema) {
+            // Binary/passthrough routes carry a `{ type: "binary" }` marker which is
+            // not a real JSON Schema type. Skip shape validation and the body-required
+            // guard so legitimately empty (zero-byte) uploads are accepted.
+            if (handler.schema.type === "binary") {
+                return;
+            }
             if (!request.body) {
                 throw new ValidationError("Request body is required but was not provided.");
             }

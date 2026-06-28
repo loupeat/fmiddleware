@@ -1,6 +1,7 @@
 import {FMiddleware} from "./middleware";
 import {APIGatewayProxyEvent, APIGatewayProxyResult} from "aws-lambda";
 import {FHttpMethod, FRequest, FResponse} from "./types";
+import {isBinary, isUrlEncoded, normalizedContentType, parseUrlEncoded} from "./content-type";
 
 /**
  * Middleware implementation for AWS Lambda using API Gateway Proxy Events.
@@ -21,25 +22,40 @@ export class FAWSLambdaMiddleware extends FMiddleware<APIGatewayProxyEvent, APIG
     }
 
     /**
-     * Extracts the body from the APIGatewayProxyEvent and parses it as JSON if it's a string.
+     * Extracts the body from the APIGatewayProxyEvent.
+     *
+     * The shape of the returned body depends on the request `Content-Type`:
+     * - `application/x-www-form-urlencoded` is parsed into a flat record.
+     * - Binary/passthrough types (e.g. `application/octet-stream`) are exposed as
+     *   a `Buffer` without attempting `JSON.parse` (base64 bodies are decoded).
+     * - Everything else is parsed as JSON, falling back to the raw string.
      *
      * @param event
      * @private
      */
     private body<T>(event: APIGatewayProxyEvent): T {
-        let body = event.body;
-        if (typeof body === "string") {
-            if (event.isBase64Encoded) {
-                body = Buffer.from(body, "base64").toString("utf-8");
-            }
-            try {
-                return JSON.parse(body) as T;
-            } catch (error) {
-                console.warn(`Failed to parse request body as JSON, see stack trace for details, using body as is.`);
-                return body as unknown as T;
-            }
-        } else {
+        const body = event.body;
+        if (typeof body !== "string") {
             return body as T;
+        }
+
+        const contentType = normalizedContentType(event.headers);
+
+        if (isBinary(contentType)) {
+            return Buffer.from(body, event.isBase64Encoded ? "base64" : "utf-8") as unknown as T;
+        }
+
+        const decoded = event.isBase64Encoded ? Buffer.from(body, "base64").toString("utf-8") : body;
+
+        if (isUrlEncoded(contentType)) {
+            return parseUrlEncoded(decoded) as unknown as T;
+        }
+
+        try {
+            return JSON.parse(decoded) as T;
+        } catch (error) {
+            console.warn(`Failed to parse request body as JSON, see stack trace for details, using body as is.`);
+            return decoded as unknown as T;
         }
     }
 

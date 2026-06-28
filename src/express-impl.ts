@@ -1,5 +1,6 @@
 import {FMiddleware} from "./middleware";
 import {FHttpMethod, FRequest, FResponse} from "./types";
+import {isBinary, isUrlEncoded, normalizedContentType, parseUrlEncoded} from "./content-type";
 
 interface QueryStringParameters {
     queryStringParameters: Record<string, string> | null;
@@ -78,14 +79,36 @@ export class FExpressMiddleware extends FMiddleware<any, any> {
     /**
      * Extracts the body from the Express request.
      *
+     * The shape of the returned body depends on the request `Content-Type`:
+     * - Binary/passthrough types (e.g. `application/octet-stream`) keep the raw
+     *   `Buffer` untouched (the consumer must register `express.raw(...)`).
+     * - `application/x-www-form-urlencoded` is parsed into a flat record (unless
+     *   the consumer already parsed it into an object via `express.urlencoded()`).
+     * - Buffers for textual types are decoded to a UTF-8 string; objects are
+     *   passed through unchanged.
+     *
      * @param request
      * @private
      */
     private body<T>(request: any): T {
-        let body = request.body;
+        const body = request.body;
+        const contentType = normalizedContentType(request.headers);
+
         if (Buffer.isBuffer(body)) {
-            return body.toString("utf-8") as unknown as T;
+            if (isBinary(contentType)) {
+                return body as unknown as T;
+            }
+            const text = body.toString("utf-8");
+            if (isUrlEncoded(contentType)) {
+                return parseUrlEncoded(text) as unknown as T;
+            }
+            return text as unknown as T;
         }
+
+        if (typeof body === "string" && isUrlEncoded(contentType)) {
+            return parseUrlEncoded(body) as unknown as T;
+        }
+
         return body as T;
     }
 

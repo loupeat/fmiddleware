@@ -236,6 +236,85 @@ const schema = {
 };
 ```
 
+## Request Body Content Types
+
+The body is extracted based on the request `Content-Type` header, identically on
+AWS Lambda and Express, so the same schema-based validation works everywhere.
+
+### JSON (default)
+
+`application/json` bodies are parsed into an object (falling back to the raw
+string if parsing fails). This is the default and needs no extra configuration.
+
+### Form-urlencoded
+
+`application/x-www-form-urlencoded` bodies (e.g. Twilio webhooks) are parsed into
+a flat `Record<string, string>` before validation, so a normal `type: "object"`
+schema applies. Percent-encoding and `+` → space are handled; repeated keys
+collapse to last-wins.
+
+```typescript
+interface TwilioWebhook {
+  From: string;
+  To: string;
+  CallSid: string;
+}
+
+const TwilioSchema = {
+  type: "object",
+  properties: {
+    From: { type: "string" },
+    To: { type: "string" },
+    CallSid: { type: "string" }
+  },
+  required: ["From", "To", "CallSid"]
+};
+
+api.post("/api/webhooks/twilio", async (request: FRequest<any, TwilioWebhook>) => {
+  const { From, CallSid } = request.body;
+  // ...
+  return api.responses.OK(request, {});
+}, TwilioSchema, {
+  // Optional: documents the route as form-encoded in the generated OpenAPI spec
+  requestContentType: "application/x-www-form-urlencoded"
+});
+```
+
+On Express, register a body parser for the content type so the raw body reaches
+the middleware:
+
+```typescript
+app.use(express.urlencoded({ extended: false }));
+// or, to let the middleware parse it:
+app.use(express.raw({ type: "application/x-www-form-urlencoded" }));
+```
+
+### Binary / passthrough
+
+For routes that accept raw bytes (e.g. a WebDAV `PUT` upload), mark the route
+with a `{ type: "binary" }` schema. `request.body` is then exposed as a `Buffer`
+(base64 Lambda bodies are decoded) without attempting `JSON.parse`, JSON-Schema
+validation is skipped, and zero-byte uploads are accepted. The route still counts
+as "having a schema", so no startup warning is emitted.
+
+```typescript
+api.put("/api/files/{id}", async (request: FRequest<any, Buffer>) => {
+  const bytes = request.body; // Buffer
+  await storage.put(api.pathParameter(request, "id"), bytes);
+  return api.responses.NoContent(request);
+}, { type: "binary" });
+```
+
+On Express, register a raw body parser for the relevant content types:
+
+```typescript
+app.use(express.raw({ type: ["application/octet-stream", "application/pdf"], limit: "25mb" }));
+```
+
+The generated OpenAPI spec maps a binary route to
+`application/octet-stream` with `{ type: "string", format: "binary" }` (override
+the media type via `requestContentType` in the OpenAPI metadata).
+
 ## Pre-Processors
 
 Pre-processors run before the handler and can enrich the request context:

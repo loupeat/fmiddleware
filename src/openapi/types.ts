@@ -23,6 +23,12 @@ export interface OpenAPIMetadata {
     responses?: Record<string, ResponseDef>;
     /** Description for the request body */
     requestBodyDescription?: string;
+    /**
+     * Media type for the request body (default: `application/json`).
+     * Set to `application/x-www-form-urlencoded` for form-encoded routes.
+     * Binary routes (schema `{ type: "binary" }`) default to `application/octet-stream`.
+     */
+    requestContentType?: string;
 }
 
 /**

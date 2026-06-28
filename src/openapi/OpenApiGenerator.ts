@@ -89,15 +89,29 @@ export class OpenApiGenerator {
 
         // Add request body for POST/PUT/PATCH
         if (handler.schema && this.methodHasRequestBody(handler.httpMethod)) {
-            const schemaName = this.registerSchema(handler.schema, schemas);
-            operation.requestBody = {
-                required: true,
-                content: {
-                    "application/json": {
-                        schema: { "$ref": `#/components/schemas/${schemaName}` }
+            if (handler.schema.type === "binary") {
+                // Binary/passthrough routes carry raw bytes, not a JSON Schema shape.
+                const contentType = metadata?.requestContentType || "application/octet-stream";
+                operation.requestBody = {
+                    required: true,
+                    content: {
+                        [contentType]: {
+                            schema: { type: "string", format: "binary" }
+                        }
                     }
-                }
-            };
+                };
+            } else {
+                const schemaName = this.registerSchema(handler.schema, schemas);
+                const contentType = metadata?.requestContentType || "application/json";
+                operation.requestBody = {
+                    required: true,
+                    content: {
+                        [contentType]: {
+                            schema: { "$ref": `#/components/schemas/${schemaName}` }
+                        }
+                    }
+                };
+            }
             if (metadata?.requestBodyDescription) {
                 operation.requestBody.description = metadata.requestBodyDescription;
             }
