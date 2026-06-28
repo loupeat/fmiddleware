@@ -234,7 +234,37 @@ const schema = {
     metadata: { type: "string", json: true }
   }
 };
+
+// Date validation (ISO 8601, YYYY-MM-DD)
+const schema = {
+  type: "object",
+  properties: {
+    dueDate: { type: "string", date: true }
+  }
+};
+
+// Time validation (ISO 8601, HH:MM:SS with optional fractional seconds)
+const schema = {
+  type: "object",
+  properties: {
+    startsAt: { type: "string", time: true }
+  }
+};
+
+// Datetime validation (ISO 8601)
+// `true` accepts any valid datetime (Z or +/-HH:MM offset);
+// `"zulu"` requires a trailing Z (UTC).
+const schema = {
+  type: "object",
+  properties: {
+    createdAt: { type: "string", datetime: true },
+    timestamp: { type: "string", datetime: "zulu" }
+  }
+};
 ```
+
+When generating an OpenAPI spec, these keywords map to the standard `format`
+strings `date`, `time`, and `date-time`.
 
 ## Request Body Content Types
 
