@@ -120,7 +120,7 @@ export class FExpressMiddleware extends FMiddleware<any, any> {
     mapRequestType(request: any): FRequest<any, any> {
         const queryStrings = this.queryStringParameters(request);
         const headers = this.mapHeaders(request);
-        const sourceIp = request.ip || request.connection.remoteAddress || "unknown";
+        const sourceIp = request.ip || request.connection?.remoteAddress || "unknown";
         const body = this.body(request);
         return {
             path: request.path,

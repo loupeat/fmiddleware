@@ -206,6 +206,14 @@ export interface ResponsePostProcessor {
 }
 
 /**
+ * Controls the concise per-request start/end log lines.
+ * - `"info"` (default): emit them at info level.
+ * - `"debug"`: emit them at debug level (only visible with `LOG_LEVEL=debug`).
+ * - `"off"`: do not emit them at all.
+ */
+export type RequestLogging = "info" | "debug" | "off";
+
+/**
  * Options accepted by the middleware implementations.
  */
 export interface FMiddlewareOptions {
@@ -217,6 +225,14 @@ export interface FMiddlewareOptions {
      * replace: `redact: [...defaultLogRedactors, myRule]`.
      */
     redact?: LogRedactor[];
+
+    /**
+     * Level for the concise per-request start/end log lines. Defaults to
+     * `"info"` so a failed invocation can be tied to its request without
+     * enabling the verbose `debug` logging. Set to `"off"` if you already log
+     * per request elsewhere.
+     */
+    requestLogging?: RequestLogging;
 
 }
 
@@ -234,6 +250,8 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
     readonly handlers: FHandler<any, any>[];
     readonly responsePostProcessors: ResponsePostProcessor[];
 
+    private readonly requestLogging: RequestLogging;
+
     private pathPrefix?: string;
 
     abstract mapRequestType(request: OriginalRequestType): FRequest<OriginalRequestType, any>;
@@ -242,6 +260,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
     constructor(defaultHeaders: Record<string, string> = {}, options?: FMiddlewareOptions) {
         this.createdAt = luxonDate();
         this.defaultHeaders = defaultHeaders;
+        this.requestLogging = options?.requestLogging ?? "info";
         if (options?.redact) {
             setLogRedactors(options.redact);
         }
@@ -323,12 +342,12 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         this.responsePostProcessors.push(responsePostProcessor);
     }
 
-    private error(request: FRequest<any, any>, statusCode: number, error: string, message: string): OriginalResponseType {
+    private errorResponse(request: FRequest<any, any>, statusCode: number, error: string, message: string): FResponse<any, any, any> {
         const errorObject = {
             code: error,
             message: message,
         };
-        return this.mapResponseType({
+        return {
             statusCode: statusCode,
             body: errorObject,
             error: errorObject,
@@ -336,7 +355,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
             multiValueHeaders: {},
             isBase64Encoded: false,
             request: request
-        });
+        };
     }
 
     private findHandler(request: FRequest<any, any>): FHandler<any, any> | undefined {
@@ -364,18 +383,59 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
     }
 
     /**
-     * Low level processing which first maps the request from the original request type to the FRequest type,
-     * if succeeds it then processes the request through all registered request pre-processors, processes the workload
-     * and then processes the response through all registered response post-processors.
+     * Outer request handler. It maps the request, emits the per-request start
+     * line, runs the processing pipeline under a single backstop, maps the
+     * response and emits the end line. Keeping logging and hardening here means
+     * every invocation that reaches a mapped request gets exactly one start and
+     * one end line, and any throw from a pipeline step (including the otherwise
+     * unguarded path-parameter extraction) becomes a logged 500 rather than a
+     * dead invocation. A start line with no matching end line therefore marks a
+     * request that died mid-flight (timeout, OOM, or a throw in `mapRequestType`
+     * / `mapResponseType`).
      */
     async process(originalRequest: OriginalRequestType): Promise<OriginalResponseType> {
+        // `mapRequestType` is intentionally left outside the backstop: without a
+        // mapped request there is no method/path to log or to build an error
+        // response around. Guard the fields it reads (e.g. sourceIp) in the impl.
         const request = this.mapRequestType(originalRequest);
+        const startedAt = luxonDate();
+        await this.logRequestStart(request);
+
+        let response: FResponse<any, any, any>;
+        try {
+            response = await this.dispatch(request);
+        } catch (error) {
+            await logger.error(`Unhandled error processing ${Helper.logRequest(request)}:`, error);
+            response = this.responses._(request, 500, "Internal server error");
+            response.error = error instanceof Error ? error : new Error(String(error));
+        }
+
+        let mapped: OriginalResponseType;
+        try {
+            mapped = this.mapResponseType(response);
+        } catch (error) {
+            await logger.error(`Error mapping response for ${Helper.logRequest(request)}:`, error);
+            response = this.errorResponse(request, 500, "Internal server error", "Failed to map the response.");
+            mapped = this.mapResponseType(response);
+        }
+
+        await this.logRequestEnd(request, response.statusCode, startedAt);
+        return mapped;
+    }
+
+    /**
+     * Runs the processing pipeline for an already-mapped request and returns the
+     * resulting `FResponse` (never the mapped, original-typed response). Path
+     * parameter extraction is left unguarded on purpose — a throw here is caught
+     * by {@link process}'s backstop and turned into a logged 500.
+     */
+    private async dispatch(request: FRequest<any, any>): Promise<FResponse<any, any, any>> {
         await logger.debug(`Processing ${request.originalRequestSource} request for ${Helper.logRequest(request)}`);
 
         const handler = this.findHandler(request);
         if (!handler) {
             await logger.warn(`No handler found for path ${Helper.logHttpMethod(request.httpMethod)}: ${request.path}`);
-            return this.error(request, 404, "Not found", "The requested resource was not found.");
+            return this.errorResponse(request, 404, "Not found", "The requested resource was not found.");
         }
 
         // Find path parameter like {tenantId} in the handlers path pattern
@@ -427,13 +487,46 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
                     await logger.debug(`Executing post-processor ${postProcessor.name} for [${postProcessor.pathPatterns}] / ${Helper.logRequest(request)}`);
                     await postProcessor.process(this, response, null);
                 } catch (error) {
-                    return this.error(request, 500, "Internal server error", `Error in response post-processor ${postProcessor.name}: ${error instanceof Error ? error.message : String(error)}`);
+                    return this.errorResponse(request, 500, "Internal server error", `Error in response post-processor ${postProcessor.name}: ${error instanceof Error ? error.message : String(error)}`);
                 }
             }
         }
 
-        // Map the response back to the original response type
-        return this.mapResponseType(response);
+        return response;
+    }
+
+    /**
+     * Emits the concise start line for a request: `--> <source> <method>: <path>`.
+     * Deliberately carries nothing else — no body, headers, query string or path
+     * parameters. Respects the configured {@link RequestLogging} level.
+     */
+    private async logRequestStart(request: FRequest<any, any>): Promise<void> {
+        if (this.requestLogging === "off") {
+            return;
+        }
+        const line = `--> ${request.originalRequestSource} ${Helper.logRequest(request)}`;
+        if (this.requestLogging === "debug") {
+            await logger.debug(line);
+        } else {
+            await logger.info(line);
+        }
+    }
+
+    /**
+     * Emits the concise end line for a request:
+     * `<-- <source> <method>: <path> <status> <duration>ms`.
+     */
+    private async logRequestEnd(request: FRequest<any, any>, statusCode: number, startedAt: DateTime): Promise<void> {
+        if (this.requestLogging === "off") {
+            return;
+        }
+        const durationMs = Math.max(0, Math.round(luxonDate().diff(startedAt).toMillis()));
+        const line = `<-- ${request.originalRequestSource} ${Helper.logRequest(request)} ${statusCode} ${durationMs}ms`;
+        if (this.requestLogging === "debug") {
+            await logger.debug(line);
+        } else {
+            await logger.info(line);
+        }
     }
 
     /**

@@ -863,6 +863,39 @@ Set the log level via environment variable:
 LOG_LEVEL=debug  # debug, info, warn, error
 ```
 
+### Per-request logging
+
+The middleware emits one concise line **before** the handler runs and one on
+completion, so a failed invocation can be tied to the request that triggered it
+from the logs alone — without turning on the verbose `debug` output:
+
+```
+[INFO]  --> aws-lambda GET   : /api/notes/42
+[INFO]  <-- aws-lambda GET   : /api/notes/42 200 12ms
+```
+
+A **start line with no matching end line** marks a request that died mid-flight
+(a Lambda timeout or out-of-memory, or a throw in `mapRequestType` /
+`mapResponseType`). Everything else — path parameters, per-processor tracing — is
+kept at `debug`. The lines carry only method, path and request source; no body,
+headers, query string or path parameters.
+
+Control the level with the `requestLogging` option:
+
+```typescript
+const api = new FAWSLambdaMiddleware({
+  requestLogging: "info" // "info" (default) | "debug" | "off"
+});
+```
+
+- `"info"` — emit at info level (default).
+- `"debug"` — emit only when `LOG_LEVEL=debug`; use this if you already log per
+  request elsewhere but still want the lines while debugging.
+- `"off"` — never emit them.
+
+The path in these lines goes through the redactors below, so a token or IBAN
+sitting in a URL is scrubbed here too.
+
 ### Redacting sensitive values from logs
 
 Everything written through the exported `logger` is passed through a list of

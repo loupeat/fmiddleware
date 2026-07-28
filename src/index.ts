@@ -14,6 +14,7 @@ export {
 export {
     FMiddleware,
     FMiddlewareOptions,
+    RequestLogging,
     FHandler,
     RequestPreProcessor,
     ResponsePostProcessor,

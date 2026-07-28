@@ -77,7 +77,9 @@ export class FAWSLambdaMiddleware extends FMiddleware<APIGatewayProxyEvent, APIG
     mapRequestType(event: APIGatewayProxyEvent): FRequest<APIGatewayProxyEvent, any> {
         const body = this.body(event);
         const httpMethod = this.httpMethod(event);
-        const sourceIp = event.requestContext.identity.sourceIp;
+        // Guarded: a malformed event without requestContext/identity must not
+        // throw here (that would kill the invocation before it can be logged).
+        const sourceIp = event.requestContext?.identity?.sourceIp ?? "unknown";
         const convertedHeaders: Record<string, string> = {};
         if (event.headers) {
             for (const key of Object.keys(event.headers)) {
