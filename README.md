@@ -863,6 +863,79 @@ Set the log level via environment variable:
 LOG_LEVEL=debug  # debug, info, warn, error
 ```
 
+### Redacting sensitive values from logs
+
+Everything written through the exported `logger` is passed through a list of
+regex **redactors** before it reaches the console. This keeps values such as
+tokens, e-mail addresses and IBANs out of CloudWatch even when they appear in a
+message, a path or an `Error`.
+
+A conservative default set is active out of the box — high-confidence secrets
+that have no legitimate reason to reach the logs:
+
+| Redactor      | Replacement         |
+| ------------- | ------------------- |
+| Bearer tokens | `Bearer [REDACTED]` |
+| Bare JWTs     | `[JWT]`             |
+| IBAN          | `[IBAN]`            |
+
+Redaction applies to string messages, to the string leaves of any logged
+object, and to the message and stack of a logged `Error` (the original `Error`
+is never mutated — a scrubbed copy is emitted).
+
+E-mail addresses are **not** redacted by default (they are frequently useful for
+debugging and low-sensitivity). An `emailRedactor` is exported so you can opt in
+when your logs must not carry them.
+
+Configure the redactors when constructing the middleware. Providing `redact`
+**replaces** the built-in set — spread `defaultLogRedactors` to extend it
+instead:
+
+```typescript
+import {
+  FAWSLambdaMiddleware,
+  defaultLogRedactors,
+  emailRedactor
+} from "@loupeat/fmiddleware";
+
+const api = new FAWSLambdaMiddleware({
+  redact: [
+    ...defaultLogRedactors,
+    emailRedactor, // opt in to e-mail redaction
+    { pattern: /\bcust_[A-Za-z0-9]+\b/g, replacement: "[CUSTOMER_ID]" }
+  ]
+});
+```
+
+You can also configure the shared logger directly — useful when you log through
+`logger` without constructing middleware:
+
+```typescript
+import {
+  logger,
+  setLogRedactors,
+  addLogRedactors,
+  defaultLogRedactors,
+  redact
+} from "@loupeat/fmiddleware";
+
+// Replace the active set
+setLogRedactors([{ pattern: /\bAcct-\d+\b/g, replacement: "[ACCOUNT]" }]);
+
+// Append to it
+addLogRedactors({ pattern: /\bpk_live_[A-Za-z0-9]+\b/g, replacement: "[KEY]" });
+
+// Turn redaction off entirely
+setLogRedactors([]);
+
+// Scrub a value yourself before logging it elsewhere
+console.log(redact(`from ${account.iban}`));
+```
+
+> Use a global (`/g`) pattern so every occurrence is replaced, not just the
+> first. Only values that go through `logger` are redacted; move any
+> `console.log` calls that matter over to `logger.*` to have them covered.
+
 ### Default Headers
 
 Both `FExpressMiddleware` and `FAWSLambdaMiddleware` set a CORS header by default:

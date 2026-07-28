@@ -13,6 +13,7 @@ export {
 // Core middleware
 export {
     FMiddleware,
+    FMiddlewareOptions,
     FHandler,
     RequestPreProcessor,
     ResponsePostProcessor,
@@ -36,7 +37,16 @@ export { FAWSLambdaMiddleware } from "./aws-lambda-impl";
 export { Validator, validator } from "./validation";
 
 // Logger
-export { logger } from "./logger";
+export {
+    logger,
+    LogRedactor,
+    defaultLogRedactors,
+    emailRedactor,
+    setLogRedactors,
+    addLogRedactors,
+    getLogRedactors,
+    redact
+} from "./logger";
 
 // OpenAPI
 export {

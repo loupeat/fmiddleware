@@ -1,4 +1,4 @@
-import {FMiddleware} from "./middleware";
+import {FMiddleware, FMiddlewareOptions} from "./middleware";
 import {FHttpMethod, FRequest, FResponse} from "./types";
 import {isBinary, isUrlEncoded, normalizedContentType, parseUrlEncoded} from "./content-type";
 
@@ -21,8 +21,8 @@ export class FExpressMiddleware extends FMiddleware<any, any> {
     /**
      * Set default headers for the middleware.
      */
-    constructor() {
-        super(FExpressMiddleware.headers());
+    constructor(options?: FMiddlewareOptions) {
+        super(FExpressMiddleware.headers(), options);
     }
 
     /**

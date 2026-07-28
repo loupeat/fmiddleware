@@ -5,7 +5,7 @@ import {
     FMiddlewareDefaultValidationProcessor
 } from "./default-impl";
 import {DateTime} from "luxon";
-import {logger} from "./logger";
+import {logger, LogRedactor, setLogRedactors} from "./logger";
 import {OpenAPIMetadata} from "./openapi/types";
 
 const luxonDate = () => DateTime.local();
@@ -206,6 +206,21 @@ export interface ResponsePostProcessor {
 }
 
 /**
+ * Options accepted by the middleware implementations.
+ */
+export interface FMiddlewareOptions {
+
+    /**
+     * Regex redactors applied to every log message before it reaches the
+     * underlying logger. Providing this replaces the built-in
+     * `defaultLogRedactors` entirely — spread them in to extend rather than
+     * replace: `redact: [...defaultLogRedactors, myRule]`.
+     */
+    redact?: LogRedactor[];
+
+}
+
+/**
  * Middleware class that retrieves requests and processes them through registered request processors.
  * Processing has four phases, textual processing, pre-processing, actual workload processing and post-processing.
  */
@@ -224,9 +239,12 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
     abstract mapRequestType(request: OriginalRequestType): FRequest<OriginalRequestType, any>;
     abstract mapResponseType(response: FResponse<OriginalRequestType, any, any>): OriginalResponseType;
 
-    constructor(defaultHeaders: Record<string, string> = {}) {
+    constructor(defaultHeaders: Record<string, string> = {}, options?: FMiddlewareOptions) {
         this.createdAt = luxonDate();
         this.defaultHeaders = defaultHeaders;
+        if (options?.redact) {
+            setLogRedactors(options.redact);
+        }
         this.requestPreProcessors = [];
         this.addRequestPreProcessor(FMiddlewareDefaultValidationProcessor);
         this.handlers = [];

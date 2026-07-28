@@ -1,4 +1,4 @@
-import {FMiddleware} from "./middleware";
+import {FMiddleware, FMiddlewareOptions} from "./middleware";
 import {APIGatewayProxyEvent, APIGatewayProxyResult} from "aws-lambda";
 import {FHttpMethod, FRequest, FResponse} from "./types";
 import {isBinary, isUrlEncoded, normalizedContentType, parseUrlEncoded} from "./content-type";
@@ -17,8 +17,8 @@ export class FAWSLambdaMiddleware extends FMiddleware<APIGatewayProxyEvent, APIG
     /**
      * Set default headers for the middleware.
      */
-    constructor() {
-        super(FAWSLambdaMiddleware.headers());
+    constructor(options?: FMiddlewareOptions) {
+        super(FAWSLambdaMiddleware.headers(), options);
     }
 
     /**
