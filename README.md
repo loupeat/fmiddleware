@@ -863,6 +863,12 @@ Set the log level via environment variable:
 LOG_LEVEL=debug  # debug, info, warn, error
 ```
 
+The exported `logger` is a drop-in for `console.*`: `logger.<level>(message, extra)`
+keeps **both** the message and the extra argument, whether the extra is an `Error`
+(name, message and stack are printed) or an object. `logger.info(obj)` logs the
+object itself, not the level name. Every argument — including errors and nested
+object leaves — is passed through the redactors below first.
+
 ### Per-request logging
 
 The middleware emits one concise line **before** the handler runs and one on

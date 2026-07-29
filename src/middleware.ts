@@ -399,13 +399,13 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         // response around. Guard the fields it reads (e.g. sourceIp) in the impl.
         const request = this.mapRequestType(originalRequest);
         const startedAt = luxonDate();
-        await this.logRequestStart(request);
+        this.logRequestStart(request);
 
         let response: FResponse<any, any, any>;
         try {
             response = await this.dispatch(request);
         } catch (error) {
-            await logger.error(`Unhandled error processing ${Helper.logRequest(request)}:`, error);
+            logger.error(`Unhandled error processing ${Helper.logRequest(request)}:`, error);
             response = this.responses._(request, 500, "Internal server error");
             response.error = error instanceof Error ? error : new Error(String(error));
         }
@@ -414,12 +414,12 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         try {
             mapped = this.mapResponseType(response);
         } catch (error) {
-            await logger.error(`Error mapping response for ${Helper.logRequest(request)}:`, error);
+            logger.error(`Error mapping response for ${Helper.logRequest(request)}:`, error);
             response = this.errorResponse(request, 500, "Internal server error", "Failed to map the response.");
             mapped = this.mapResponseType(response);
         }
 
-        await this.logRequestEnd(request, response.statusCode, startedAt);
+        this.logRequestEnd(request, response.statusCode, startedAt);
         return mapped;
     }
 
@@ -430,31 +430,31 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
      * by {@link process}'s backstop and turned into a logged 500.
      */
     private async dispatch(request: FRequest<any, any>): Promise<FResponse<any, any, any>> {
-        await logger.debug(`Processing ${request.originalRequestSource} request for ${Helper.logRequest(request)}`);
+        logger.debug(`Processing ${request.originalRequestSource} request for ${Helper.logRequest(request)}`);
 
         const handler = this.findHandler(request);
         if (!handler) {
-            await logger.warn(`No handler found for path ${Helper.logHttpMethod(request.httpMethod)}: ${request.path}`);
+            logger.warn(`No handler found for path ${Helper.logHttpMethod(request.httpMethod)}: ${request.path}`);
             return this.errorResponse(request, 404, "Not found", "The requested resource was not found.");
         }
 
         // Find path parameter like {tenantId} in the handlers path pattern
         request.pathParameters = Helper.extractPathParameters(handler.pathPattern, request.path);
-        await logger.debug(`Extracted ${Helper.logPathParameters(request.pathParameters)} from ${request.originalRequestSource} request for ${Helper.logRequest(request)}`);
+        logger.debug(`Extracted ${Helper.logPathParameters(request.pathParameters)} from ${request.originalRequestSource} request for ${Helper.logRequest(request)}`);
 
         let response: FResponse<any, any, any>;
 
         // Process request pre-processors
         let preprocessingError: Error | undefined = undefined;
-        await logger.debug(`Checking ${this.requestPreProcessors.length} pre-processors for [${request.path}] ${request.originalRequestSource}`);
+        logger.debug(`Checking ${this.requestPreProcessors.length} pre-processors for [${request.path}] ${request.originalRequestSource}`);
         for (const preProcessor of this.requestPreProcessors) {
-            await logger.debug(`Checking pre-processor ${preProcessor.name} for [${preProcessor.pathPatterns.join(", ")}] / [${request.path}] and  [${preProcessor.requestSource}] / [${request.originalRequestSource}]`);
+            logger.debug(`Checking pre-processor ${preProcessor.name} for [${preProcessor.pathPatterns.join(", ")}] / [${request.path}] and  [${preProcessor.requestSource}] / [${request.originalRequestSource}]`);
             if (Helper.matchesHttpMethod(request.httpMethod, preProcessor.httpMethods) && Helper.matchesAnyPathPattern(request.path, preProcessor.pathPatterns) && Helper.matchesOriginalRequestSource(request.originalRequestSource, preProcessor.requestSource)) {
                 try {
-                    await logger.debug(`Executing pre-processor ${preProcessor.name} for [${preProcessor.pathPatterns.join(", ")}] / ${Helper.logRequest(request)}`);
+                    logger.debug(`Executing pre-processor ${preProcessor.name} for [${preProcessor.pathPatterns.join(", ")}] / ${Helper.logRequest(request)}`);
                     await preProcessor.process(this, request, handler);
                 } catch (error) {
-                    await logger.error(`Error in pre-processor ${preProcessor.name}:`, error);
+                    logger.error(`Error in pre-processor ${preProcessor.name}:`, error);
                     preprocessingError = error instanceof Error ? error : new Error(String(error));
                     break;
                 }
@@ -468,10 +468,10 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         } else {
             // Process the actual workload
             try {
-                await logger.debug(`Processing handler [${handler.httpMethod}]: ${handler.pathPattern} for ${Helper.logRequest(request)}`);
+                logger.debug(`Processing handler [${handler.httpMethod}]: ${handler.pathPattern} for ${Helper.logRequest(request)}`);
                 response = await handler.process(request);
             } catch (error) {
-                await logger.error(`Error in handler [${handler.httpMethod}]: ${handler.pathPattern}:`, error);
+                logger.error(`Error in handler [${handler.httpMethod}]: ${handler.pathPattern}:`, error);
                 response = this.responses._(request, 500, "Internal server error");
                 response.error = error instanceof Error ? error : new Error(String(error));
             }
@@ -479,12 +479,12 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         response.headers = response.headers || this.defaultHeaders;
 
         // Process response post-processors
-        await logger.debug(`Checking ${this.responsePostProcessors.length} post-processors for [${request.path}] ${request.originalRequestSource}`);
+        logger.debug(`Checking ${this.responsePostProcessors.length} post-processors for [${request.path}] ${request.originalRequestSource}`);
         for (const postProcessor of this.responsePostProcessors) {
-            await logger.debug(`Checking post-processor ${postProcessor.name} for [${postProcessor.pathPatterns}] / ${Helper.logRequest(request)} and [${postProcessor.requestSource}] / [${request.originalRequestSource}]`);
+            logger.debug(`Checking post-processor ${postProcessor.name} for [${postProcessor.pathPatterns}] / ${Helper.logRequest(request)} and [${postProcessor.requestSource}] / [${request.originalRequestSource}]`);
             if (Helper.matchesAnyPathPattern(request.path, postProcessor.pathPatterns) && Helper.matchesOriginalRequestSource(request.originalRequestSource, postProcessor.requestSource)) {
                 try {
-                    await logger.debug(`Executing post-processor ${postProcessor.name} for [${postProcessor.pathPatterns}] / ${Helper.logRequest(request)}`);
+                    logger.debug(`Executing post-processor ${postProcessor.name} for [${postProcessor.pathPatterns}] / ${Helper.logRequest(request)}`);
                     await postProcessor.process(this, response, null);
                 } catch (error) {
                     return this.errorResponse(request, 500, "Internal server error", `Error in response post-processor ${postProcessor.name}: ${error instanceof Error ? error.message : String(error)}`);
@@ -500,15 +500,15 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
      * Deliberately carries nothing else — no body, headers, query string or path
      * parameters. Respects the configured {@link RequestLogging} level.
      */
-    private async logRequestStart(request: FRequest<any, any>): Promise<void> {
+    private logRequestStart(request: FRequest<any, any>): void {
         if (this.requestLogging === "off") {
             return;
         }
         const line = `--> ${request.originalRequestSource} ${Helper.logRequest(request)}`;
         if (this.requestLogging === "debug") {
-            await logger.debug(line);
+            logger.debug(line);
         } else {
-            await logger.info(line);
+            logger.info(line);
         }
     }
 
@@ -516,16 +516,16 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
      * Emits the concise end line for a request:
      * `<-- <source> <method>: <path> <status> <duration>ms`.
      */
-    private async logRequestEnd(request: FRequest<any, any>, statusCode: number, startedAt: DateTime): Promise<void> {
+    private logRequestEnd(request: FRequest<any, any>, statusCode: number, startedAt: DateTime): void {
         if (this.requestLogging === "off") {
             return;
         }
         const durationMs = Math.max(0, Math.round(luxonDate().diff(startedAt).toMillis()));
         const line = `<-- ${request.originalRequestSource} ${Helper.logRequest(request)} ${statusCode} ${durationMs}ms`;
         if (this.requestLogging === "debug") {
-            await logger.debug(line);
+            logger.debug(line);
         } else {
-            await logger.info(line);
+            logger.info(line);
         }
     }
 

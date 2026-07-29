@@ -165,3 +165,75 @@ describe("log redaction", () => {
         });
     });
 });
+
+describe("console.* argument fidelity (#8)", () => {
+    let logSpy: jest.SpyInstance;
+    let errorSpy: jest.SpyInstance;
+    let debugSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        setLogRedactors(defaultLogRedactors);
+        logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+        debugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
+        jest.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+        setLogRedactors(defaultLogRedactors);
+    });
+
+    const lastArgs = (spy: jest.SpyInstance): any[] => spy.mock.calls[spy.mock.calls.length - 1];
+
+    test("error(message, error) keeps the message and renders the error", () => {
+        logger.error("Could not send incident code", new Error("connect ETIMEDOUT"));
+
+        const args = lastArgs(errorSpy);
+        expect(args.some((arg) => typeof arg === "string" && arg.includes("Could not send incident code"))).toBe(true);
+        const emitted = args.find((arg) => arg instanceof Error) as Error;
+        expect(emitted).toBeDefined();
+        expect(emitted.message).toContain("connect ETIMEDOUT");
+        expect(emitted.stack).toContain("connect ETIMEDOUT");
+    });
+
+    test("info(message, object) keeps the message and renders the object", () => {
+        logger.info("Existing user is:", { username: "u1", role: "HR" });
+
+        const args = lastArgs(logSpy);
+        expect(args.some((arg) => typeof arg === "string" && arg.includes("Existing user is:"))).toBe(true);
+        expect(args).toContainEqual({ username: "u1", role: "HR" });
+    });
+
+    test("info(object) logs the object rather than the level name", () => {
+        logger.info({ username: "u1" });
+
+        const args = lastArgs(logSpy);
+        expect(args).toContainEqual({ username: "u1" });
+        // The old Axe path collapsed a bare object to the literal string "info".
+        expect(args).not.toContain("info");
+    });
+
+    test("info(string) is unchanged", () => {
+        logger.info("just text");
+        expect(lastArgs(logSpy).join(" ")).toContain("[INFO]  just text");
+    });
+
+    test("redaction still applies to a rendered error argument", () => {
+        logger.error("boom", new Error(`token ${JWT}`));
+
+        const emitted = lastArgs(errorSpy).find((arg) => arg instanceof Error) as Error;
+        expect(emitted.message).toContain("[JWT]");
+        expect(emitted.message).not.toContain(JWT);
+    });
+
+    test("redaction still applies to a rendered object argument", () => {
+        logger.info("account", { iban: IBAN });
+        expect(lastArgs(logSpy)).toContainEqual({ iban: "[IBAN]" });
+    });
+
+    test("debug is suppressed at the default info level", () => {
+        logger.debug("verbose detail");
+        expect(debugSpy).not.toHaveBeenCalled();
+    });
+});

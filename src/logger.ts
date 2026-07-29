@@ -1,4 +1,3 @@
-import Axe from "axe";
 import chalk from "chalk";
 
 /**
@@ -142,36 +141,59 @@ function redactArgs(args: any[]): any[] {
     }
 }
 
-const customLogger = {
-    log: (...args: any[]) => {
-        console.log('[INFO] ', ...redactArgs(args));
-    },
-    info: (...args: any[]) => {
-        console.log('[INFO] ', ...redactArgs(args));
-    },
-    warn: (...args: any[]) => {
-        console.warn(chalk.yellow('[WARN] '), ...redactArgs(args));
-    },
-    error: (...args: any[]) => {
-        console.error(chalk.red('[ERROR]'), ...redactArgs(args));
-    },
-    fatal: (...args: any[]) => {
-        console.error(chalk.bgRed.white.bold('[FATAL]'), ...redactArgs(args));
-    },
-    debug: (...args: any[]) => {
-        console.debug('[DEBUG]', ...redactArgs(args));
-    },
+/**
+ * Severity ranking used for `LOG_LEVEL` filtering. A call is emitted only when
+ * its level is at least as severe as the configured threshold. `log` shares
+ * `info`'s rank, matching `console.log`.
+ */
+const LEVELS: Record<string, number> = {
+    debug: 20,
+    info: 30,
+    log: 30,
+    warn: 40,
+    error: 50,
+    fatal: 60
 };
 
-function getLogLevel(): string {
-    return process.env.LOG_LEVEL || "info";
+/**
+ * The active threshold, resolved once from `LOG_LEVEL` (default `info`) — the
+ * same moment the logger was previously fixed at Axe construction time. An
+ * unrecognised value falls back to `info`.
+ */
+const threshold: number = LEVELS[(process.env.LOG_LEVEL || "info").toLowerCase()] ?? LEVELS.info;
+
+function enabled(level: keyof typeof LEVELS): boolean {
+    return LEVELS[level] >= threshold;
 }
 
-export const logger = new Axe({
-    name: "fmiddleware",
-    level: getLogLevel(),
-    meta: {
-        show: false
+/**
+ * A `console.*`-faithful logger. Unlike the structured logger it replaces, every
+ * argument is preserved and forwarded — `logger.error("context", err)` keeps
+ * both the context and the error, and `logger.info(obj)` logs the object rather
+ * than swallowing it. The active redactors are applied to every argument first,
+ * so tokens, JWTs and IBANs never reach the console regardless of the argument's
+ * shape.
+ *
+ * Output is gated by `LOG_LEVEL`; the `[LEVEL]` prefixes and colours are
+ * unchanged. Methods return `void` — awaiting them stays a harmless no-op.
+ */
+export const logger = {
+    log: (...args: any[]): void => {
+        if (enabled("log")) console.log('[INFO] ', ...redactArgs(args));
     },
-    logger: customLogger
-});
+    info: (...args: any[]): void => {
+        if (enabled("info")) console.log('[INFO] ', ...redactArgs(args));
+    },
+    warn: (...args: any[]): void => {
+        if (enabled("warn")) console.warn(chalk.yellow('[WARN] '), ...redactArgs(args));
+    },
+    error: (...args: any[]): void => {
+        if (enabled("error")) console.error(chalk.red('[ERROR]'), ...redactArgs(args));
+    },
+    fatal: (...args: any[]): void => {
+        if (enabled("fatal")) console.error(chalk.bgRed.white.bold('[FATAL]'), ...redactArgs(args));
+    },
+    debug: (...args: any[]): void => {
+        if (enabled("debug")) console.debug('[DEBUG]', ...redactArgs(args));
+    },
+};
