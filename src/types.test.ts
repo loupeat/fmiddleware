@@ -3,7 +3,8 @@ import {
     NotFoundError,
     AuthenticationError,
     ForbiddenError,
-    ConflictError
+    ConflictError,
+    isClientError
 } from "./index";
 
 describe("Error Types", () => {
@@ -65,6 +66,40 @@ describe("Error Types", () => {
             errors.forEach(error => {
                 expect(() => { throw error; }).toThrow(Error);
             });
+        });
+    });
+
+    describe("isClientError", () => {
+        test("is true for every class the error processor maps to a 4xx", () => {
+            const errors = [
+                new ValidationError("test"),
+                new NotFoundError("test"),
+                new AuthenticationError("test"),
+                new ForbiddenError("test"),
+                new ConflictError("test")
+            ];
+
+            errors.forEach(error => {
+                expect(isClientError(error)).toBe(true);
+            });
+        });
+
+        test("is true for a subclass, which still maps to its base class's status", () => {
+            class EntityForbiddenError extends ForbiddenError {}
+
+            expect(isClientError(new EntityForbiddenError("test"))).toBe(true);
+        });
+
+        test("is false for a plain Error, which becomes a 500", () => {
+            expect(isClientError(new Error("test"))).toBe(false);
+            expect(isClientError(new TypeError("test"))).toBe(false);
+        });
+
+        test("is false for non-errors", () => {
+            expect(isClientError(undefined)).toBe(false);
+            expect(isClientError(null)).toBe(false);
+            expect(isClientError("NotFoundError")).toBe(false);
+            expect(isClientError({name: "NotFoundError"})).toBe(false);
         });
     });
 });

@@ -7,7 +7,8 @@ export {
     ConflictError,
     ValidationError,
     AuthenticationError,
-    ForbiddenError
+    ForbiddenError,
+    isClientError
 } from "./types";
 
 // Core middleware

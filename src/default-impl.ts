@@ -31,6 +31,11 @@ export const FMiddlewareDefaultValidationProcessor: RequestPreProcessor = {
     }
 };
 
+/**
+ * Maps the known error classes onto their status codes. Keep the set in step with `isClientError`
+ * in `./types`, which decides that the same classes are logged at `warn` rather than `error` — a
+ * class handled here but missing there answers 4xx while still writing an `[ERROR]` line.
+ */
 export const FMiddlewareDefaultErrorProcessor: ResponsePostProcessor = {
     name: "FMiddlewareDefaultErrorProcessor",
     pathPatterns: ["/**"],

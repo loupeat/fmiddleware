@@ -73,3 +73,26 @@ export class ForbiddenError extends Error {
         this.name = "ForbiddenError";
     }
 }
+
+/**
+ * True for the error classes the middleware answers with a 4xx: a client asked
+ * for something it may not have or does not exist, and the API handled that
+ * correctly. Such a throw is an expected outcome, not a fault, which is why the
+ * middleware logs it at `warn` and reserves `error` for the 500 path.
+ *
+ * Subclasses count — a per-entity `ForbiddenError` subclass is still a 403.
+ *
+ * Keep this list in step with `FMiddlewareDefaultErrorProcessor`, which maps the
+ * same classes to their status codes. A class present there but missing here
+ * gets a 4xx response with an `[ERROR]` line, which is exactly the mismatch this
+ * predicate exists to prevent.
+ */
+export function isClientError(error: unknown): boolean {
+    return (
+        error instanceof NotFoundError ||
+        error instanceof ValidationError ||
+        error instanceof AuthenticationError ||
+        error instanceof ForbiddenError ||
+        error instanceof ConflictError
+    );
+}

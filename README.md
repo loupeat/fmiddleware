@@ -902,6 +902,34 @@ const api = new FAWSLambdaMiddleware({
 The path in these lines goes through the redactors below, so a token or IBAN
 sitting in a URL is scrubbed here too.
 
+### Log level of a throw
+
+When a handler or pre-processor throws, the middleware logs it at the level the
+outcome deserves rather than always at `error`:
+
+```
+[WARN]  Error in handler [GET]: /api/notes/{id}: NotFoundError: no such note
+[ERROR] Error in handler [POST]: /api/notes: TypeError: cannot read 'id' of undefined
+```
+
+Anything the [error classes](#error-classes) turn into a **4xx** is an expected,
+handled outcome — a correct 404 or 403 is the API working, not failing — so it
+goes out at `warn`. Every other throw becomes a **500** and stays at `error`.
+Subclasses follow their base class, so a per-entity `ForbiddenError` subclass is
+still a 403 and still a `warn`.
+
+This keeps `[ERROR]` usable as a fault signal: alarms and log searches on it see
+genuine failures instead of a request log. The predicate is exported as
+`isClientError(error)` if you need the same split in your own code.
+
+One exception: the outer backstop in `process()` always logs at `error`. An error
+escaping `dispatch()` never reaches the post-processor that would downgrade it,
+so it is a 500 whatever class it carries.
+
+> **Changed in 1.6.0.** Before this, every throw was logged at `error`. If you
+> alarm on `[ERROR]` volume, expect the baseline to drop; if you relied on
+> `[ERROR]` to see 4xx responses, watch `[WARN]` as well.
+
 ### Redacting sensitive values from logs
 
 Everything written through the exported `logger` is passed through a list of
@@ -1175,6 +1203,10 @@ FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
 
 ### Error Classes
 
+Throwing any of these from a handler or pre-processor produces the status below
+and is logged at `warn`; anything else is a 500 at `error`. See
+[Log level of a throw](#log-level-of-a-throw).
+
 | Class | HTTP Status |
 |-------|-------------|
 | `ValidationError` | 400 |
@@ -1182,6 +1214,10 @@ FResponse<OriginalRequestType, RequestBodyType, ResponseBodyType>
 | `ForbiddenError` | 403 |
 | `NotFoundError` | 404 |
 | `ConflictError` | 409 |
+
+| Function | Description |
+|----------|-------------|
+| `isClientError(error)` | True for the classes above and their subclasses — the split the middleware uses to pick `warn` over `error` |
 
 ### OpenAPI Types
 

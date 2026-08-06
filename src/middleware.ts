@@ -1,4 +1,4 @@
-import {FHttpMethod, FRequest, FResponse, ValidationError} from "./types";
+import {FHttpMethod, FRequest, FResponse, isClientError, ValidationError} from "./types";
 import {
     FMiddlewareDefaultErrorProcessor,
     FMiddlewareDefaultStatsLoggingProcessor,
@@ -405,6 +405,8 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
         try {
             response = await this.dispatch(request);
         } catch (error) {
+            // Unconditionally `error`, unlike the two sites inside `dispatch`: nothing downstream
+            // can still downgrade this one, so it is a 500 whatever class it carries.
             logger.error(`Unhandled error processing ${Helper.logRequest(request)}:`, error);
             response = this.responses._(request, 500, "Internal server error");
             response.error = error instanceof Error ? error : new Error(String(error));
@@ -421,6 +423,27 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
 
         this.logRequestEnd(request, response.statusCode, startedAt);
         return mapped;
+    }
+
+    /**
+     * Logs a throw caught inside {@link dispatch}, at the level the outcome
+     * deserves. Errors {@link FMiddlewareDefaultErrorProcessor} turns into a 4xx
+     * are expected, handled outcomes — a correct 404 or 403 is the API working,
+     * not failing — so they go out at `warn`. Everything else becomes a 500 and
+     * stays at `error`, which keeps the error log usable as a fault signal
+     * instead of a request log (loupeat/loupe#1422).
+     *
+     * Only for the two sites whose error still passes through the post-processor
+     * chain. {@link process}'s backstop logs at `error` unconditionally: an error
+     * escaping `dispatch` never reaches the post-processors, so it is a 500 no
+     * matter which class it is.
+     */
+    private logPipelineError(message: string, error: unknown): void {
+        if (isClientError(error)) {
+            logger.warn(message, error);
+        } else {
+            logger.error(message, error);
+        }
     }
 
     /**
@@ -454,7 +477,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
                     logger.debug(`Executing pre-processor ${preProcessor.name} for [${preProcessor.pathPatterns.join(", ")}] / ${Helper.logRequest(request)}`);
                     await preProcessor.process(this, request, handler);
                 } catch (error) {
-                    logger.error(`Error in pre-processor ${preProcessor.name}:`, error);
+                    this.logPipelineError(`Error in pre-processor ${preProcessor.name}:`, error);
                     preprocessingError = error instanceof Error ? error : new Error(String(error));
                     break;
                 }
@@ -471,7 +494,7 @@ export abstract class FMiddleware<OriginalRequestType, OriginalResponseType> {
                 logger.debug(`Processing handler [${handler.httpMethod}]: ${handler.pathPattern} for ${Helper.logRequest(request)}`);
                 response = await handler.process(request);
             } catch (error) {
-                logger.error(`Error in handler [${handler.httpMethod}]: ${handler.pathPattern}:`, error);
+                this.logPipelineError(`Error in handler [${handler.httpMethod}]: ${handler.pathPattern}:`, error);
                 response = this.responses._(request, 500, "Internal server error");
                 response.error = error instanceof Error ? error : new Error(String(error));
             }
