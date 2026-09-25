@@ -147,7 +147,7 @@ export class FAWSLambdaMiddleware extends FMiddleware<APIGatewayProxyEvent, APIG
             body = response.body.toString("base64");
             response.isBase64Encoded = true;
         } else {
-            body = JSON.stringify(response.body, null, 2);
+            body = JSON.stringify(response.body);
         }
         return {
             statusCode: response.statusCode,

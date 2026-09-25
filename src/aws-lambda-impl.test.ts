@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { FAWSLambdaMiddleware } from "./aws-lambda-impl";
+import { FResponse } from "./types";
 
 /**
  * Builds a minimal APIGatewayProxyEvent for body-extraction tests.
@@ -112,5 +113,57 @@ describe("FAWSLambdaMiddleware body extraction", () => {
             expect(Buffer.isBuffer(request.body)).toBe(true);
             expect((request.body as Buffer).length).toBe(0);
         });
+    });
+});
+
+describe("FAWSLambdaMiddleware response mapping", () => {
+    let api: FAWSLambdaMiddleware;
+
+    beforeEach(() => {
+        api = new FAWSLambdaMiddleware();
+    });
+
+    function response(body: any): FResponse<APIGatewayProxyEvent, any, any> {
+        return {
+            statusCode: 200,
+            body,
+            headers: {},
+            multiValueHeaders: {},
+            isBase64Encoded: false,
+            request: {} as any
+        };
+    }
+
+    test("serializes a JSON body compactly", () => {
+        const data = { items: [{ id: 1, name: "a" }, { id: 2, tags: ["x", "y"] }], nested: { ok: true } };
+        const result = api.mapResponseType(response(data));
+        expect(result.body).toBe(JSON.stringify(data));
+        expect(result.body).not.toMatch(/\n/);
+        expect(JSON.parse(result.body)).toEqual(data);
+        expect(result.isBase64Encoded).toBe(false);
+    });
+
+    test("keeps newlines that are part of the data", () => {
+        const data = { text: "line1\nline2" };
+        const result = api.mapResponseType(response(data));
+        expect(JSON.parse(result.body)).toEqual(data);
+    });
+
+    test("passes a string body through unchanged", () => {
+        const result = api.mapResponseType(response("<p>\n  hello\n</p>"));
+        expect(result.body).toBe("<p>\n  hello\n</p>");
+        expect(result.isBase64Encoded).toBe(false);
+    });
+
+    test("base64-encodes a Buffer body", () => {
+        const bytes = Buffer.from([0x00, 0xff, 0x10, 0x80]);
+        const result = api.mapResponseType(response(bytes));
+        expect(result.body).toBe(bytes.toString("base64"));
+        expect(result.isBase64Encoded).toBe(true);
+    });
+
+    test("yields an empty string for a null body", () => {
+        expect(api.mapResponseType(response(null)).body).toBe("");
+        expect(api.mapResponseType(response(undefined)).body).toBe("");
     });
 });
