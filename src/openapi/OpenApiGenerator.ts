@@ -377,7 +377,11 @@ export class OpenApiGenerator {
         const { $schema, $id, ...openApiSchema } = schema;
 
         if (openApiSchema.properties) {
-            for (const prop of Object.values(openApiSchema.properties) as any[]) {
+            // Work on copies: the route's schema object is the one the validator
+            // compiles, so stripping a keyword from it would switch the check off.
+            const properties: Record<string, any> = {};
+            for (const [name, original] of Object.entries(openApiSchema.properties) as [string, any][]) {
+                const prop = this.stripPlainText(original);
                 if (prop.type === "string") {
                     if (prop.date) {
                         prop.format = "date";
@@ -396,10 +400,37 @@ export class OpenApiGenerator {
                         delete prop.email;
                     }
                 }
+                properties[name] = prop;
             }
+            openApiSchema.properties = properties;
         }
 
         return openApiSchema;
+    }
+
+    /**
+     * Copy a property schema without the `plainText` keyword, at any nesting
+     * depth. It has no OpenAPI counterpart, so it is left out of the spec.
+     */
+    private stripPlainText(schema: any): any {
+        if (Array.isArray(schema)) {
+            return schema.map(item => this.stripPlainText(item));
+        }
+        if (!schema || typeof schema !== "object") {
+            return schema;
+        }
+        const { plainText, ...copy } = schema;
+        if (copy.properties && typeof copy.properties === "object") {
+            copy.properties = Object.fromEntries(
+                Object.entries(copy.properties).map(([name, prop]) => [name, this.stripPlainText(prop)])
+            );
+        }
+        for (const key of ["items", "anyOf", "oneOf", "allOf"]) {
+            if (copy[key]) {
+                copy[key] = this.stripPlainText(copy[key]);
+            }
+        }
+        return copy;
     }
 
     /**

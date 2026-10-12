@@ -143,6 +143,65 @@ describe("Validator", () => {
         });
     });
 
+    describe("Plain text validation", () => {
+        const schema = {
+            type: "object",
+            properties: {
+                name: { type: "string", plainText: true },
+                message: { type: ["string", "null"], plainText: true }
+            }
+        };
+
+        test("text without markup should pass", () => {
+            for (const name of [
+                "Budget < 5000",
+                "<50",
+                ">1000",
+                "a > b && b < 3",
+                "Smith & Sons",
+                "trailing <",
+                "1 << 2",
+                ""
+            ]) {
+                expect(() => validator.validate(schema, { name })).not.toThrow();
+            }
+        });
+
+        test("HTML markup should fail", () => {
+            for (const name of [
+                '<a href="https://example.com">click</a>',
+                "</p>",
+                "<!-- comment -->",
+                "<!DOCTYPE html>",
+                "<IMG src=x>",
+                "Jane Doe <jane@example.com>",
+                "Please call me <b>today</b> after lunch",
+                "line one\n<script>alert(1)</script>"
+            ]) {
+                expect(() => validator.validate(schema, { name })).toThrow(ValidationError);
+            }
+        });
+
+        test("null should pass on a nullable field", () => {
+            expect(() => validator.validate(schema, { message: null })).not.toThrow();
+            expect(() => validator.validate(schema, { message: "" })).not.toThrow();
+            expect(() => validator.validate(schema, { message: "<p>hi</p>" })).toThrow(ValidationError);
+        });
+
+        test("plainText: false should disable the check", () => {
+            const disabled = {
+                type: "object",
+                properties: { name: { type: "string", plainText: false } }
+            };
+            expect(() => validator.validate(disabled, { name: "<b>bold</b>" })).not.toThrow();
+        });
+
+        test("error message should describe the rule in words", () => {
+            expect(() => validator.validate(schema, { name: "<b>bold</b>" }))
+                .toThrow("Validation Error: data/name must be plain text without HTML markup");
+        });
+    });
+
     describe("Email validation edge cases", () => {
         const emailSchema = {
             type: "object",

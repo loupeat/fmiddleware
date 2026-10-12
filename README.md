@@ -261,10 +261,44 @@ const schema = {
     timestamp: { type: "string", datetime: "zulu" }
   }
 };
+
+// Plain text validation (rejects HTML markup)
+const schema = {
+  type: "object",
+  properties: {
+    name: { type: "string", plainText: true },
+    message: { type: ["string", "null"], plainText: true }
+  }
+};
 ```
 
-When generating an OpenAPI spec, these keywords map to the standard `format`
-strings `date`, `time`, and `date-time`.
+When generating an OpenAPI spec, the date and time keywords map to the standard
+`format` strings `date`, `time`, and `date-time`. `plainText` has no standard
+`format` and is left out of the generated spec.
+
+#### `plainText`
+
+A value fails when it contains what an HTML parser would read as the start of a
+tag, a closing tag, a comment or a declaration: a `<` immediately followed by an
+ASCII letter, `/` or `!`. Other angle brackets are legitimate plain text and pass.
+
+| Value | Result |
+| --- | --- |
+| `Budget < 5000`, `<50`, `>1000` | passes |
+| `a > b && b < 3` | passes |
+| `Smith & Sons` | passes |
+| `<a href="https://example.com">click</a>` | fails |
+| `</p>`, `<!-- comment -->`, `<IMG src=x>` | fails |
+| `Jane Doe <jane@example.com>` | fails (accepted trade-off) |
+
+Empty strings pass, and so does `null` when the field's `type` allows it. A
+rejected value produces `must be plain text without HTML markup` in the
+`ValidationError`, and therefore in the 400 response body.
+
+> **This is input validation, not output encoding.** It does not replace
+> escaping and is not an XSS guarantee: `&` and `<50` are allowed, and values
+> that reach a handler by another path (a path parameter, for instance) never
+> pass the body schema. Always escape a value when rendering it into HTML.
 
 ## Request Body Content Types
 

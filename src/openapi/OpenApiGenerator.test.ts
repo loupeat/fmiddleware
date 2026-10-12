@@ -60,3 +60,36 @@ describe("OpenApiGenerator request bodies", () => {
         expect(op.requestBody.content["application/pdf"].schema).toEqual({ type: "string", format: "binary" });
     });
 });
+
+describe("OpenApiGenerator custom keywords", () => {
+    test("leaves plainText out of the spec without touching the route schema", () => {
+        const api = new FExpressMiddleware();
+        const schema = {
+            type: "object",
+            properties: {
+                name: { type: "string", plainText: true },
+                message: { type: ["string", "null"], plainText: true },
+                id: { type: "string", uuid: true },
+                contact: {
+                    type: "object",
+                    properties: { company: { type: "string", plainText: true } }
+                },
+                tags: { type: "array", items: { type: "string", plainText: true } }
+            }
+        };
+        api.post("/api/contacts", async (request) => api.responses.OK(request, {}), schema);
+
+        const spec = new OpenApiGenerator(api, config).generate();
+
+        expect(JSON.stringify(spec)).not.toContain("plainText");
+        const generated: any = Object.values(spec.components!.schemas!)
+            .find((s: any) => s.properties?.contact);
+        expect(generated.properties.name).toEqual({ type: "string" });
+        expect(generated.properties.id).toEqual({ type: "string", format: "uuid" });
+
+        // The validator compiles the same object, so the keywords must survive.
+        expect(schema.properties.name).toEqual({ type: "string", plainText: true });
+        expect(schema.properties.id).toEqual({ type: "string", uuid: true });
+        expect(schema.properties.contact.properties.company.plainText).toBe(true);
+    });
+});

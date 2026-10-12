@@ -62,6 +62,15 @@ export class Validator {
         return true;
     }
 
+    private static validatePlainText(schema: boolean, data: string): boolean {
+        if (schema) {
+            // The start of a tag, closing tag, comment or declaration. A bare
+            // angle bracket ("Budget < 5000", "<50") is legitimate plain text.
+            return !/<[a-zA-Z\/!]/.test(data);
+        }
+        return true;
+    }
+
     constructor() {
         this.ajv = new Ajv();
         this.ajv.addKeyword({
@@ -99,6 +108,13 @@ export class Validator {
             type: "string",
             schemaType: ["boolean", "string"],
             validate: Validator.validateDatetime
+        });
+        this.ajv.addKeyword({
+            keyword: "plainText",
+            type: "string",
+            schemaType: "boolean",
+            validate: Validator.validatePlainText,
+            error: {message: "must be plain text without HTML markup"}
         });
     }
 
